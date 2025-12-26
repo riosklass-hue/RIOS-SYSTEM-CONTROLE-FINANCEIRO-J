@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Edit2, X, Filter } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Filter, Download } from 'lucide-react';
 import { Entry, Goal, Expense } from '../types';
 import { formatCurrency, calculateEntries } from '../utils/calculations';
 
@@ -27,11 +27,8 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
 
   const allCalculated = useMemo(() => calculateEntries(entries, goals), [entries, goals]);
   
-  // Agrupamento por empresa para o quadro lateral - Respeitando o filtro de empresa
   const companySummaries = useMemo(() => {
     const summaryMap: Record<string, number> = {};
-    
-    // Filtra quais empresas devem aparecer no resumo lateral com base no filtro ativo
     const displayedCompanies = filterCompany === 'GERAL' 
       ? goals 
       : goals.filter(g => g.companyName === filterCompany);
@@ -58,6 +55,31 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
   const totalGanhosGeral = allCalculated.reduce((acc, curr) => acc + curr.totalGain, 0);
   const totalSaidas = expenses.reduce((acc, curr) => acc + curr.value, 0);
   const emCaixa = totalGanhosGeral - totalSaidas;
+
+  const exportToCSV = () => {
+    const headers = ["Data", "Empresa", "Bloqueira", "Agente", "Parcial", "IDEP 40H", "IDEP 20H", "Total"];
+    const rows = filteredEntries.map(e => [
+      new Date(e.date).toLocaleDateString('pt-BR'),
+      e.companyName,
+      e.bloqueiraValue.toString().replace('.', ','),
+      e.agentValue.toString().replace('.', ','),
+      e.partialTotal.toString().replace('.', ','),
+      e.idep40hValue.toString().replace('.', ','),
+      e.idep20hValue.toString().replace('.', ','),
+      e.totalGain.toString().replace('.', ',')
+    ]);
+
+    const csvContent = [headers, ...rows].map(r => r.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio_rios_${filterCompany.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +188,7 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
             <input type="number" step="0.01" className={inputClasses} value={formData.idep20hValue ?? ''} onChange={e => setFormData({ ...formData, idep20hValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
           </div>
           <div className="flex items-end">
-            <button type="submit" className={`w-full text-white px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all h-[30px] ${editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#0891b2] hover:bg-[#06b6d4]'}`}>
+            <button type="submit" className={`w-full text-white px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all h-[34px] ${editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#0891b2] hover:bg-[#06b6d4]'}`}>
               {editingId ? 'Salvar' : 'Lançar'}
             </button>
           </div>
@@ -177,20 +199,28 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
         {/* Tabela Principal */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-[#0f172a] rounded-xl shadow-2xl border border-slate-800 overflow-hidden">
-            <div className="p-3 border-b border-slate-800 bg-slate-900/30 flex items-center justify-between">
+            <div className="p-3 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300">Lançamentos</h3>
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-slate-500" />
-                <select 
-                  className="bg-slate-800 border border-slate-700 text-[10px] text-white rounded px-2 py-1 focus:ring-1 focus:ring-[#22d3ee] outline-none"
-                  value={filterCompany}
-                  onChange={(e) => setFilterCompany(e.target.value)}
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={exportToCSV}
+                  className="flex items-center gap-2 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase transition-all"
                 >
-                  <option value="GERAL">FILTRAR: GERAL</option>
-                  {goals.map(g => (
-                    <option key={g.id} value={g.companyName}>{g.companyName}</option>
-                  ))}
-                </select>
+                  <Download className="w-3 h-3" /> Excel
+                </button>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <select 
+                    className="bg-slate-800 border border-slate-700 text-[10px] text-white rounded px-2 py-1 focus:ring-1 focus:ring-[#22d3ee] outline-none"
+                    value={filterCompany}
+                    onChange={(e) => setFilterCompany(e.target.value)}
+                  >
+                    <option value="GERAL">FILTRAR: GERAL</option>
+                    {goals.map(g => (
+                      <option key={g.id} value={g.companyName}>{g.companyName}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -287,7 +317,6 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
             </div>
           </div>
           
-          {/* Box Informativo do Filtro Ativo */}
           {filterCompany !== 'GERAL' && (
              <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-3 animate-in fade-in zoom-in duration-300">
                 <h4 className="text-[10px] font-black text-blue-400 uppercase mb-1">Visualização: {filterCompany}</h4>
