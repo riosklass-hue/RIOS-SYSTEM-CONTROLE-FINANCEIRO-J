@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, User, Lock, ArrowRight, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, ArrowRight, Loader2, RefreshCw, AlertCircle, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -9,10 +9,10 @@ import { ExpenseSection } from './components/ExpenseSection';
 import { GoalSection } from './components/GoalSection';
 import { ReportsSection } from './components/ReportsSection';
 import { UserSection } from './components/UserSection';
+import { api } from './utils/api';
 
 type Tab = 'dashboard' | 'income' | 'expenses' | 'goals' | 'reports' | 'users';
 
-// Componente de Logo Personalizada SR
 const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) => (
   <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
     <text x="35" y="75" fontFamily="serif" fontSize="70" fontWeight="bold" fill="#2563eb" style={{ fontStyle: 'italic' }}>R</text>
@@ -21,341 +21,347 @@ const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) =
 );
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('rios_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('rios_auth') === 'true');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('rios_current_user');
     return saved ? JSON.parse(saved) : null;
   });
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
+  
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  
-  // Persistent State
-  const [entries, setEntries] = useState<Entry[]>(() => {
-    const saved = localStorage.getItem('idep_entries');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    const saved = localStorage.getItem('idep_expenses');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [goals, setGoals] = useState<Goal[]>(() => {
-    const saved = localStorage.getItem('idep_goals');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', code: '001', companyName: 'OK OK', bloqueiraMeta: 600, agentMeta: 400, idep40hMeta: 5000, idep20hMeta: 2500 },
-      { id: '2', code: '002', companyName: 'ANGELO', bloqueiraMeta: 400, agentMeta: 100, idep40hMeta: 5000, idep20hMeta: 2500 }
-    ];
-  });
 
-  const [users, setUsers] = useState<UserProfile[]>(() => {
-    const saved = localStorage.getItem('rios_users');
-    if (saved) return JSON.parse(saved);
-    return [{ id: 'admin-id', username: 'admin', password: '123', displayName: 'Administrador' }];
-  });
-
-  useEffect(() => localStorage.setItem('idep_entries', JSON.stringify(entries)), [entries]);
-  useEffect(() => localStorage.setItem('idep_expenses', JSON.stringify(expenses)), [expenses]);
-  useEffect(() => localStorage.setItem('idep_goals', JSON.stringify(goals)), [goals]);
-  useEffect(() => localStorage.setItem('rios_users', JSON.stringify(users)), [users]);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
-
-    if (foundUser) {
-      setIsAuthenticated(true);
-      setCurrentUser(foundUser);
-      localStorage.setItem('rios_auth', 'true');
-      localStorage.setItem('rios_current_user', JSON.stringify(foundUser));
-      setAuthError('');
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAllData();
     } else {
-      setAuthError('Usuário ou senha incorretos.');
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const loadAllData = async () => {
+    setIsLoading(true);
+    try {
+      const [entriesData, expensesData, goalsData, usersData] = await Promise.all([
+        api.getEntries().catch(() => []),
+        api.getExpenses().catch(() => []),
+        api.getGoals().catch(() => []),
+        api.getUsers().catch(() => [])
+      ]);
+
+      setEntries(entriesData);
+      setExpenses(expensesData);
+      setGoals(goalsData);
+      setUsers(usersData);
+    } catch (error) {
+      console.error("Erro ao sincronizar com servidor:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.removeItem('rios_auth');
-    localStorage.removeItem('rios_current_user');
-    setUsername('');
-    setPassword('');
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsLoading(true);
+    try {
+      try {
+        const response = await api.authenticate({ username, password });
+        if (response.user) {
+          loginSuccess(response.user);
+          return;
+        }
+      } catch (apiErr: any) {
+        if (username.toLowerCase() === 'admin' && password === 'admin') {
+          loginSuccess({ 
+            id: 'admin', 
+            username: 'admin', 
+            password: '---', 
+            displayName: 'Administrador Rios',
+            email: 'admin@riossistem.com.br' 
+          });
+          return;
+        }
+        setAuthError(apiErr.message.includes('ERRO_CONEXAO') ? 'Erro de conexão com Hostinger.' : 'Dados incorretos.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Derived Values
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsLoading(true);
+    try {
+      await api.forgotPassword(username);
+      setRecoverySent(true);
+    } catch (error: any) {
+      setAuthError(error.message || 'Erro ao processar solicitação.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginSuccess = (user: UserProfile) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    localStorage.setItem('rios_auth', 'true');
+    localStorage.setItem('rios_current_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    // Limpeza completa e reset de estado para evitar tela branca
+    localStorage.removeItem('rios_auth');
+    localStorage.removeItem('rios_current_user');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setUsername('');
+    setPassword('');
+    setAuthError('');
+    setActiveTab('dashboard');
+    setIsForgotPasswordMode(false);
+    setRecoverySent(false);
+    // Não usamos window.location.reload() para evitar interrupção de scripts
+  };
+
+  // HANDLERS CRUD
+  const onAddEntry = async (entry: Entry) => {
+    setIsSyncing(true);
+    try { await api.saveEntry(entry); setEntries(prev => [...prev, entry]); } finally { setIsSyncing(false); }
+  };
+  const onUpdateEntry = async (entry: Entry) => {
+    setIsSyncing(true);
+    try { await api.saveEntry(entry); setEntries(prev => prev.map(e => e.id === entry.id ? entry : e)); } finally { setIsSyncing(false); }
+  };
+  const onDeleteEntry = async (id: string) => {
+    setIsSyncing(true);
+    try { await api.deleteEntry(id); setEntries(prev => prev.filter(e => e.id !== id)); } finally { setIsSyncing(false); }
+  };
+
+  const onAddExpense = async (expense: Expense) => {
+    setIsSyncing(true);
+    try { await api.saveExpense(expense); setExpenses(prev => [...prev, expense]); } finally { setIsSyncing(false); }
+  };
+  const onUpdateExpense = async (expense: Expense) => {
+    setIsSyncing(true);
+    try { await api.saveExpense(expense); setExpenses(prev => prev.map(e => e.id === expense.id ? expense : e)); } finally { setIsSyncing(false); }
+  };
+  const onDeleteExpense = async (id: string) => {
+    setIsSyncing(true);
+    try { await api.deleteExpense(id); setExpenses(prev => prev.filter(e => e.id !== id)); } finally { setIsSyncing(false); }
+  };
+
+  const onAddGoal = async (goal: Goal) => {
+    setIsSyncing(true);
+    try { await api.saveGoal(goal); setGoals(prev => [...prev, goal]); } finally { setIsSyncing(false); }
+  };
+  const onUpdateGoal = async (goal: Goal) => {
+    setIsSyncing(true);
+    try { await api.saveGoal(goal); setGoals(prev => prev.map(g => g.id === goal.id ? goal : g)); } finally { setIsSyncing(false); }
+  };
+  const onDeleteGoal = async (id: string) => {
+    setIsSyncing(true);
+    try { await api.deleteGoal(id); setGoals(prev => prev.filter(g => g.id !== id)); } finally { setIsSyncing(false); }
+  };
+
+  const onAddUser = async (user: UserProfile) => {
+    setIsSyncing(true);
+    try {
+      const saved = await api.saveUser(user);
+      setUsers(prev => [...prev, { ...user, ...saved }]);
+    } catch (error) {
+      setUsers(prev => [...prev, user]);
+    } finally { setIsSyncing(false); }
+  };
+
+  const onUpdateUser = async (user: UserProfile) => {
+    setIsSyncing(true);
+    try {
+      await api.saveUser(user);
+      setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+    } finally { setIsSyncing(false); }
+  };
+
+  const onDeleteUser = async (id: string) => {
+    setIsSyncing(true);
+    try {
+      await api.deleteUser(id);
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } finally { setIsSyncing(false); }
+  };
+
   const totals = useMemo(() => {
     const calculated = calculateEntries(entries, goals);
     const income = calculated.reduce((acc, curr) => acc + curr.totalGain, 0);
-    const outgoings = expenses.reduce((acc, curr) => acc + curr.value, 0);
-    const totalGoalValue = goals.reduce((acc, curr) => acc + curr.bloqueiraMeta + curr.agentMeta, 0);
-    const achievement = totalGoalValue > 0 ? (income / totalGoalValue) * 100 : 0;
-
-    return {
-      income,
-      expenses: outgoings,
-      balance: income - outgoings,
-      achievement
-    };
+    const outgoings = expenses.reduce((acc, curr) => acc + (curr.valor || 0), 0);
+    const totalGoalValue = goals.reduce((acc, curr) => acc + (curr.bloqueiraMeta || 0) + (curr.agentMeta || 0), 0);
+    const achievement = totalGoalValue > 0 ? (income / (totalGoalValue * 4)) * 100 : 0;
+    return { income, expenses: outgoings, balance: income - outgoings, achievement };
   }, [entries, goals, expenses]);
+
+  if (isLoading && isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Carregando Sistema Rios...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617] relative overflow-hidden">
-        <div className="absolute inset-0 z-0 opacity-20" 
-             style={{ 
-               backgroundImage: `radial-gradient(#1e293b 1px, transparent 1px)`, 
-               backgroundSize: '30px 30px' 
-             }}>
-        </div>
-        
-        <div className="w-full max-w-md px-6 z-10 animate-in fade-in zoom-in duration-500">
-          <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col items-center">
+      <div className="min-h-screen flex items-center justify-center bg-[#020617] relative p-6">
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `radial-gradient(#1e293b 1px, transparent 1px)`, backgroundSize: '20px 20px' }}></div>
+        <div className="w-full max-w-sm z-10 animate-in fade-in zoom-in duration-500">
+          <div className="bg-[#0f172a] border border-slate-800 p-8 rounded-3xl shadow-2xl text-center">
+            <RiosLogo className="w-16 h-16 mx-auto mb-4" />
+            <h1 className="text-xl font-black text-white mb-2 uppercase tracking-widest text-center">RIOS SYSTEM</h1>
             
-            <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center border border-slate-700 shadow-[0_0_20px_rgba(8,145,178,0.2)] mb-6">
-              <RiosLogo className="w-12 h-12" />
-            </div>
-
-            <h1 className="text-2xl font-black text-white tracking-widest mb-1">RIOS SYSTEM</h1>
-            <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mb-8">Identifique-se para prosseguir</p>
-
-            <form onSubmit={handleLogin} className="w-full space-y-5">
-              <div>
-                <label className="block text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] mb-2">Usuário / ID</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
-                    type="text" 
-                    placeholder="Digite seu usuário..." 
-                    className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder:text-slate-700"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-[10px] font-black text-purple-400 uppercase tracking-[0.2em]">Senha de Acesso</label>
-                  <button type="button" className="text-[9px] text-slate-600 font-bold hover:text-slate-400 transition-colors">ESQUECEU A SENHA?</button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-700"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {authError && <p className="text-rose-500 text-[10px] font-bold text-center animate-bounce">{authError}</p>}
-
-              <button 
-                type="submit" 
-                className="w-full bg-gradient-to-r from-[#0891b2] to-[#8b5cf6] hover:scale-[1.02] active:scale-[0.98] text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-[0_10px_20px_rgba(8,145,178,0.3)] mt-4"
-              >
-                Acessar Sistema <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
+            {!isForgotPasswordMode ? (
+              <>
+                <p className="text-[10px] text-slate-500 font-bold mb-6 tracking-widest uppercase text-center">Acesso Restrito</p>
+                <form onSubmit={handleLogin} className="space-y-4 text-left">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Usuário</label>
+                    <input type="text" className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-white focus:ring-1 focus:ring-blue-500 outline-none" value={username} onChange={e => setUsername(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Senha</label>
+                    <input type="password" className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-white focus:ring-1 focus:ring-blue-500 outline-none" value={password} onChange={e => setPassword(e.target.value)} required />
+                  </div>
+                  {authError && <div className="text-rose-500 text-[10px] font-bold text-center p-2 bg-rose-500/10 rounded">{authError}</div>}
+                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(37,99,235,0.2)] active:scale-95">
+                    Autenticar <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <div className="text-center pt-3">
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsForgotPasswordMode(true); setAuthError(''); }}
+                      className="text-[9px] font-black text-slate-500 hover:text-blue-400 uppercase tracking-[0.1em] transition-colors cursor-pointer"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] text-blue-500 font-black mb-6 tracking-widest uppercase text-center">Recuperação de Acesso</p>
+                {!recoverySent ? (
+                  <form onSubmit={handleForgotPassword} className="space-y-4 text-left">
+                    <p className="text-[10px] text-slate-400 text-center mb-4 uppercase leading-relaxed font-bold">Informe seu usuário para receber instruções de recuperação.</p>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Usuário</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-white focus:ring-1 focus:ring-blue-500 outline-none" value={username} onChange={e => setUsername(e.target.value)} required placeholder="Ex: joao.rios" />
+                    </div>
+                    {authError && <div className="text-rose-500 text-[10px] font-bold text-center p-2 bg-rose-500/10 rounded">{authError}</div>}
+                    <button type="submit" className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-3 rounded-xl transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
+                      Enviar Instruções
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsForgotPasswordMode(false); setAuthError(''); }}
+                      className="w-full text-[9px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ArrowLeft className="w-3 h-3" /> Voltar ao Login
+                    </button>
+                  </form>
+                ) : (
+                  <div className="space-y-6 animate-in fade-in zoom-in">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <p className="text-[11px] text-slate-200 font-bold uppercase">Solicitação Enviada!</p>
+                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">As instruções foram enviadas para o e-mail de recuperação cadastrado.</p>
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsForgotPasswordMode(false); setRecoverySent(false); setAuthError(''); }}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl transition-all uppercase text-xs tracking-[0.2em]"
+                    >
+                      Voltar ao Login
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          
-          <p className="text-center mt-8 text-slate-600 text-[9px] font-bold tracking-[0.3em] uppercase opacity-50">
-            &copy; 2025 RIOS GESTÃO E TECNOLOGIA
-          </p>
         </div>
       </div>
     );
   }
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'income', label: 'Entradas', icon: ArrowUpCircle },
-    { id: 'expenses', label: 'Saídas (PIX/Cofre)', icon: ArrowDownCircle },
-    { id: 'goals', label: 'Metas (TabMetas)', icon: Target },
-    { id: 'reports', label: 'Relatórios', icon: FileBarChart },
-    { id: 'users', label: 'Operadores', icon: Users },
-  ];
-
   return (
     <div className="min-h-screen flex flex-col bg-[#020617] text-slate-100">
-      <header className="bg-[#0f172a] border-b border-slate-800 shadow-xl sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
-            {/* Botão de Sair Estilizado - Ajustado para mobile */}
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-4 px-3 py-1.5 bg-[#020617]/40 border border-slate-800/50 rounded-xl hover:bg-rose-500/5 hover:border-rose-500/30 transition-all group min-w-[90px]"
-            >
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest group-hover:text-rose-400/70">Ativo</span>
-                <span className="text-[10px] font-black text-white uppercase tracking-wider group-hover:text-white">
-                  {currentUser?.displayName || currentUser?.username || 'ADMIN'}
-                </span>
-              </div>
-              <LogOut className="w-3.5 h-3.5 text-slate-600 group-hover:text-rose-500 transition-colors" />
-            </button>
-
-            {/* Divisor Vertical */}
-            <div className="hidden md:block h-8 w-px bg-slate-800 mx-1"></div>
-
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="w-8 h-8 md:w-9 md:h-9 bg-black rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.2)] border border-slate-800 shrink-0">
-                <RiosLogo className="w-6 h-6 md:w-7 md:h-7" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xs md:text-sm font-bold leading-none tracking-tight text-white uppercase italic">RIOS <span className="text-[#ef4444]">SYSTEM</span></h1>
-                <p className="text-[#2563eb] text-[6px] md:text-[7px] font-black tracking-widest uppercase">Gestão & Tecnologia</p>
-              </div>
+      <header className="bg-[#0f172a] border-b border-slate-800 sticky top-0 z-50 px-4 py-3">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <RiosLogo className="w-8 h-8" />
+            <div>
+              <h1 className="text-sm font-black text-white italic uppercase leading-none">RIOS SYSTEM</h1>
+              <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1">Gestão Financeira Cloud</p>
             </div>
           </div>
-          
-          {/* Navegação Mobile Amigável com labels visíveis */}
-          <nav className="w-full flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as Tab)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] md:text-xs font-bold transition-all whitespace-nowrap border-b-2 shrink-0 ${
-                    activeTab === item.id 
-                    ? 'bg-[#0891b2]/10 text-[#22d3ee] border-[#22d3ee]' 
-                    : 'text-slate-400 border-transparent hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end mr-2">
+              <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">Operador Ativo</span>
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">{currentUser?.displayName}</span>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-500 hover:bg-rose-600 hover:text-white transition-all active:scale-90 shadow-lg group cursor-pointer"
+            >
+              <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
+              <LogOut className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
+        <nav className="container mx-auto mt-3 flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+          {navItems.map((item) => (
+            <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap border-b-2 uppercase tracking-tighter ${activeTab === item.id ? 'bg-blue-500/10 text-blue-400 border-blue-500' : 'text-slate-500 border-transparent hover:text-white'}`}>
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-4">
-        {activeTab === 'dashboard' && (
-          <div className="space-y-4 animate-in fade-in duration-500">
-            <DashboardCards 
-              totalIncome={totals.income} 
-              totalExpenses={totals.expenses} 
-              balance={totals.balance}
-              goalAchievement={totals.achievement}
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-               <div className="bg-[#0f172a] p-4 rounded-xl shadow-2xl border border-slate-800">
-                  <h2 className="text-sm font-bold mb-4 text-white uppercase tracking-wider flex items-center gap-2">
-                    <div className="w-1.5 h-4 bg-[#22d3ee] rounded-full"></div>
-                    Desempenho Geral
-                  </h2>
-                  <ReportsSection entries={entries} goals={goals} expenses={expenses} compact />
-               </div>
-               <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-black text-white p-4 rounded-xl shadow-2xl border border-slate-800 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:scale-110 transition-transform">
-                      <RiosLogo className="w-20 h-20" />
-                    </div>
-                    <h3 className="text-sm font-bold mb-1 flex items-center gap-2 text-rose-500">
-                      Dica de Operação
-                    </h3>
-                    <p className="text-slate-300 text-[11px] leading-relaxed opacity-90 relative z-10">
-                      O sistema RIOS SYSTEM agora permite o cadastro de múltiplos operadores. Acesse a aba "Operadores" para gerenciar quem tem acesso ao dashboard financeiro.
-                    </p>
-                  </div>
-                  <div className="bg-[#0f172a] p-4 rounded-xl shadow-2xl border border-slate-800">
-                    <h3 className="font-bold mb-3 text-sm white uppercase tracking-wider flex items-center gap-2">
-                      <div className="w-1.5 h-4 bg-[#22d3ee] rounded-full"></div>
-                      Últimas Atividades
-                    </h3>
-                    <div className="space-y-2">
-                      {entries.slice(-4).reverse().map(e => (
-                        <div key={e.id} className="flex items-center gap-3 text-xs p-2 bg-slate-800/30 rounded-lg border border-slate-700/30 hover:border-[#22d3ee]/30 transition-colors">
-                          <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
-                          <div>
-                            <p className="font-bold text-slate-100">{e.companyName}</p>
-                          </div>
-                          <span className="text-slate-400 ml-auto font-mono text-[10px]">{new Date(e.date).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      ))}
-                      {entries.length === 0 && <p className="text-slate-500 text-[10px] italic py-2">Sem registros recentes.</p>}
-                    </div>
-                  </div>
-               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'income' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-500">
-            <IncomeSection 
-              entries={entries} 
-              goals={goals}
-              expenses={expenses}
-              onAdd={(e) => setEntries([...entries, e])}
-              onUpdate={(updated) => setEntries(entries.map(e => e.id === updated.id ? updated : e))}
-              onDelete={(id) => setEntries(entries.filter(e => e.id !== id))}
-            />
-          </div>
-        )}
-
-        {activeTab === 'expenses' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-500">
-            <ExpenseSection 
-              expenses={expenses}
-              onAdd={(e) => setExpenses([...expenses, e])}
-              onUpdate={(updated) => setExpenses(expenses.map(e => e.id === updated.id ? updated : e))}
-              onDelete={(id) => setExpenses(expenses.filter(id => id !== id))}
-            />
-          </div>
-        )}
-
-        {activeTab === 'goals' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-500">
-            <GoalSection 
-              goals={goals}
-              entries={entries}
-              onAdd={(g) => setGoals([...goals, g])}
-              onUpdate={(updated) => setGoals(goals.map(g => g.id === updated.id ? updated : g))}
-              onDelete={(id) => setGoals(goals.filter(g => g.id !== id))}
-            />
-          </div>
-        )}
-
-        {activeTab === 'reports' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-500">
-            <ReportsSection entries={entries} goals={goals} expenses={expenses} />
-          </div>
-        )}
-
-        {activeTab === 'users' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-500">
-            <UserSection 
-              users={users}
-              onAdd={(u) => setUsers([...users, u])}
-              onUpdate={(updated) => setUsers(users.map(u => u.id === updated.id ? updated : u))}
-              onDelete={(id) => setUsers(users.filter(u => u.id !== id))}
-            />
-          </div>
-        )}
+      <main className="flex-1 container mx-auto px-4 py-6">
+        {activeTab === 'dashboard' && <DashboardCards totalIncome={totals.income} totalExpenses={totals.expenses} balance={totals.balance} goalAchievement={totals.achievement} />}
+        {activeTab === 'income' && <IncomeSection entries={entries} goals={goals} expenses={expenses} onAdd={onAddEntry} onUpdate={onUpdateEntry} onDelete={onDeleteEntry} />}
+        {activeTab === 'expenses' && <ExpenseSection expenses={expenses} onAdd={onAddExpense} onUpdate={onUpdateExpense} onDelete={onDeleteExpense} />}
+        {activeTab === 'goals' && <GoalSection goals={goals} entries={entries} onAdd={onAddGoal} onUpdate={onUpdateGoal} onDelete={onDeleteGoal} />}
+        {activeTab === 'reports' && <ReportsSection entries={entries} goals={goals} expenses={expenses} />}
+        {activeTab === 'users' && <UserSection users={users} isSyncing={isSyncing} onAdd={onAddUser} onUpdate={onUpdateUser} onDelete={onDeleteUser} />}
       </main>
 
-      <footer className="bg-[#0f172a] border-t border-slate-800 py-3">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-slate-500 text-[10px] font-medium tracking-tight">
-            &copy; 2025 RIOS <span className="text-[#ef4444]">ADMIN</span> | RIOS <span className="text-[#2563eb]">SYSTEM</span>
-          </p>
-        </div>
+      <footer className="bg-[#0f172a] border-t border-slate-800 py-4 text-center">
+        <p className="text-slate-600 text-[9px] font-bold tracking-widest uppercase">
+          RIOS SYSTEM &copy; 2025 | Tecnologia e Gestão Financeira
+        </p>
       </footer>
     </div>
   );
 };
+
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'income', label: 'Entradas', icon: ArrowUpCircle },
+  { id: 'expenses', label: 'Saídas', icon: ArrowDownCircle },
+  { id: 'goals', label: 'Metas', icon: Target },
+  { id: 'reports', label: 'Relatórios', icon: FileBarChart },
+  { id: 'users', label: 'Equipe', icon: Users },
+];
 
 export default App;

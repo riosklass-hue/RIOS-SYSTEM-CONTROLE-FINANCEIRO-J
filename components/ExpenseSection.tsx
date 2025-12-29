@@ -14,18 +14,18 @@ interface Props {
 export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onDelete }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Expense>>({
-    date: new Date().toISOString().split('T')[0],
-    description: '',
+    data: new Date().toISOString().split('T')[0],
+    nome: '',
     local: ExpenseLocal.PIX,
-    value: undefined
+    valor: undefined
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.description && formData.date) {
+    if (formData.nome && formData.data) {
       const expenseData = {
         ...formData,
-        value: Number(formData.value) || 0,
+        valor: Number(formData.valor) || 0,
       } as Expense;
 
       if (editingId) {
@@ -35,31 +35,31 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
         onAdd({ ...expenseData, id: crypto.randomUUID() });
       }
       
-      setFormData(prev => ({ ...prev, description: '', value: undefined }));
+      setFormData(prev => ({ ...prev, nome: '', valor: undefined }));
     }
   };
 
   const handleEdit = (expense: Expense) => {
     setEditingId(expense.id);
     setFormData({
-      date: expense.date,
-      description: expense.description,
+      data: expense.data,
+      nome: expense.nome,
       local: expense.local,
-      value: expense.value
+      valor: expense.valor
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setFormData(prev => ({ ...prev, description: '', value: undefined }));
+    setFormData(prev => ({ ...prev, nome: '', valor: undefined }));
   };
 
-  const totalPix = expenses.filter(e => e.local === ExpenseLocal.PIX).reduce((acc, curr) => acc + curr.value, 0);
-  const totalCofre = expenses.filter(e => e.local === ExpenseLocal.COFRE).reduce((acc, curr) => acc + curr.value, 0);
+  const totalPix = expenses.filter(e => e.local === ExpenseLocal.PIX).reduce((acc, curr) => acc + curr.valor, 0);
+  const totalCofre = expenses.filter(e => e.local === ExpenseLocal.COFRE).reduce((acc, curr) => acc + curr.valor, 0);
 
   const inputClasses = "w-full px-2 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-xs text-white focus:ring-1 focus:ring-rose-500 focus:outline-none transition-all placeholder-slate-500";
-  const labelClasses = "block text-[9px] font-bold text-slate-400 uppercase mb-1 tracking-widest";
+  const labelClasses = "block text-[9px] font-bold text-slate-400 uppercase mb-1.5 tracking-widest";
 
   return (
     <div className="space-y-4">
@@ -81,7 +81,7 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClasses}>Data</label>
-              <input type="date" className={inputClasses} value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
+              <input type="date" className={inputClasses} value={formData.data} onChange={e => setFormData({ ...formData, data: e.target.value })} required />
             </div>
             <div>
               <label className={labelClasses}>Canal</label>
@@ -91,15 +91,15 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className={labelClasses}>Descrição</label>
-              <input type="text" placeholder="Ex: Fornecedor..." className={inputClasses} value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} required />
+              <label className={labelClasses}>Descrição (Nome)</label>
+              <input type="text" placeholder="Ex: Fornecedor..." className={inputClasses} value={formData.nome} onChange={e => setFormData({ ...formData, nome: e.target.value })} required />
             </div>
             <div className="md:col-span-1">
               <label className={labelClasses}>Valor (R$)</label>
-              <input type="number" step="0.01" className={inputClasses} value={formData.value ?? ''} onChange={e => setFormData({ ...formData, value: e.target.value === '' ? undefined : parseFloat(e.target.value) })} required />
+              <input type="number" step="0.01" className={inputClasses} value={formData.valor ?? ''} onChange={e => setFormData({ ...formData, valor: e.target.value === '' ? undefined : parseFloat(e.target.value) })} required />
             </div>
             <div className="flex items-end">
-              <button type="submit" className={`w-full text-white px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all h-[30px] ${editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-700'}`}>
+              <button type="submit" className={`w-full text-white px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all h-[34px] ${editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-700'}`}>
                 {editingId ? 'Salvar' : 'Registrar'}
               </button>
             </div>
@@ -141,20 +141,20 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
               {expenses.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-slate-500 italic bg-[#0f172a]">
-                    Sem dados.
+                    Sem dados registrados na nuvem.
                   </td>
                 </tr>
               ) : (
                 expenses.map((row) => (
                   <tr key={row.id} className={`hover:bg-slate-800/20 transition-colors bg-[#0f172a] ${editingId === row.id ? 'bg-amber-500/5' : ''}`}>
-                    <td className="px-4 py-2 font-mono text-slate-400 text-[10px]">{new Date(row.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="px-4 py-2 font-medium text-white text-[11px]">{row.description}</td>
+                    <td className="px-4 py-2 font-mono text-slate-400 text-[10px]">{new Date(row.data).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-4 py-2 font-medium text-white text-[11px]">{row.nome}</td>
                     <td className="px-4 py-2">
                       <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.local === ExpenseLocal.PIX ? 'bg-indigo-900/50 text-indigo-400' : 'bg-amber-900/50 text-amber-400'}`}>
-                        {row.local}
+                        {row.local || '---'}
                       </span>
                     </td>
-                    <td className="px-4 py-2 font-black text-rose-500 text-[11px]">{formatCurrency(row.value)}</td>
+                    <td className="px-4 py-2 font-black text-rose-500 text-[11px]">{formatCurrency(row.valor)}</td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => handleEdit(row)} className="p-1 text-slate-500 hover:text-blue-400 bg-slate-800/30 rounded-md transition-colors">

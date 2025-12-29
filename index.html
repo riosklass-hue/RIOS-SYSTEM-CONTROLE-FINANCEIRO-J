@@ -2,14 +2,21 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
     <meta name="description" content="RIOS SYSTEM - Gestão e Tecnologia Financeira">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>RIOS SYSTEM | Gestão Financeira</title>
+    <meta name="apple-mobile-web-app-title" content="RIOS Admin">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830284.png">
     
-    <!-- Tailwind CSS via CDN (Para produção o ideal seria via build, mas mantendo a estrutura atual) -->
+    <title>RIOS SYSTEM | Dashboard Financeiro</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     
@@ -18,32 +25,24 @@
             font-family: 'Inter', sans-serif; 
             background-color: #020617;
             -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
-        /* Custom scrollbar for dark theme */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e293b;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #334155;
-        }
-        /* Hide scrollbar for Chrome, Safari and Opera */
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
-        /* Hide scrollbar for IE, Edge and Firefox */
-        .scrollbar-hide {
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
+        /* Esconder scrollbars mas manter funcionalidade */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Estilização suave para o scroll geral */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        
+        /* Previne seleção de texto acidental em menus para parecer App nativo */
+        nav button, header button {
+            user-select: none;
         }
     </style>
+
 <script type="importmap">
 {
   "imports": {
@@ -58,5 +57,6 @@
 </head>
 <body class="text-slate-100 antialiased overflow-x-hidden">
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>

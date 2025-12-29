@@ -26,10 +26,10 @@ export interface Entry {
 
 export interface Expense {
   id: string;
-  date: string;
-  description: string;
-  local: ExpenseLocal;
-  value: number;
+  data: string; // Mapeado para 'data' no banco
+  nome: string; // Mapeado para 'nome' (antiga descrição)
+  valor: number; // Mapeado para 'valor'
+  local?: ExpenseLocal; // Opcional se não houver na tabela, mantido para lógica de interface
 }
 
 export interface UserProfile {
@@ -37,6 +37,7 @@ export interface UserProfile {
   username: string;
   password: string;
   displayName: string;
+  email: string; // Adicionado para recuperação de senha
 }
 
 export interface CalculatedEntry extends Entry {

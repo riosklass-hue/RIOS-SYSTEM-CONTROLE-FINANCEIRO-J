@@ -53,7 +53,9 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
 
   const totalGanhosExibidos = filteredEntries.reduce((acc, curr) => acc + curr.totalGain, 0);
   const totalGanhosGeral = allCalculated.reduce((acc, curr) => acc + curr.totalGain, 0);
-  const totalSaidas = expenses.reduce((acc, curr) => acc + curr.value, 0);
+  
+  // CORREÇÃO: Usando 'valor' em vez de 'value' para evitar NaN
+  const totalSaidas = expenses.reduce((acc, curr) => acc + (curr.valor || 0), 0);
   const emCaixa = totalGanhosGeral - totalSaidas;
 
   const exportToCSV = () => {
@@ -292,7 +294,7 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
         <div className="space-y-4">
           <div className="bg-[#0f172a] rounded-xl shadow-2xl border border-slate-800 overflow-hidden h-fit">
             <div className="p-3 border-b border-slate-800 bg-slate-900/30">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300">Total de Ganho</h3>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300">Resumo de Saldo</h3>
             </div>
             <div className="divide-y divide-slate-800">
               {companySummaries.map(company => (
@@ -303,15 +305,15 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
               ))}
               
               <div className="bg-yellow-400/90 text-black px-4 py-2.5 flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase">TOTAL</span>
+                <span className="text-[10px] font-black uppercase">GANHO TOTAL</span>
                 <span className="text-xs font-black">{formatCurrency(totalGanhosGeral)}</span>
               </div>
               <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase">SAÍDA</span>
+                <span className="text-[10px] font-black uppercase">SAÍDA GERAL</span>
                 <span className="text-xs font-black">{formatCurrency(totalSaidas)}</span>
               </div>
               <div className="bg-yellow-500 text-black px-4 py-2.5 flex justify-between items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]">
-                <span className="text-[10px] font-black uppercase">EM CAIXA</span>
+                <span className="text-[10px] font-black uppercase">SALDO EM CAIXA</span>
                 <span className="text-sm font-black">{formatCurrency(emCaixa)}</span>
               </div>
             </div>
