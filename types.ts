@@ -1,7 +1,8 @@
 
 export enum ExpenseLocal {
   PIX = 'PIX',
-  COFRE = 'COFRE'
+  COFRE = 'COFRE',
+  OUTROS = 'OUTROS'
 }
 
 export interface Goal {

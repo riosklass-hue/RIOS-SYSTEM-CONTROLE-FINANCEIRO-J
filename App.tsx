@@ -122,9 +122,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Limpeza completa e reset de estado para evitar tela branca
-    localStorage.removeItem('rios_auth');
-    localStorage.removeItem('rios_current_user');
+    localStorage.clear();
     setIsAuthenticated(false);
     setCurrentUser(null);
     setUsername('');
@@ -133,7 +131,6 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
     setIsForgotPasswordMode(false);
     setRecoverySent(false);
-    // Não usamos window.location.reload() para evitar interrupção de scripts
   };
 
   // HANDLERS CRUD
