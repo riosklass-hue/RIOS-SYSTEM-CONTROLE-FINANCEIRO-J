@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Entry, Goal, Expense, ExpenseLocal } from '../types';
 import { calculateEntries, formatCurrency } from '../utils/calculations';
-import { TrendingDown, TrendingUp, CreditCard, Landmark } from 'lucide-react';
+import { TrendingDown, TrendingUp, CreditCard, Landmark, Building2, Shield, UserCheck } from 'lucide-react';
 
 interface Props {
   entries: Entry[];
@@ -44,9 +44,10 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(exp => {
-      if (selectedMonth === 'Tudo') return true;
-      const expMonth = new Date(exp.data).toLocaleString('pt-BR', { month: 'long' });
-      return expMonth === selectedMonth;
+      const expDate = new Date(exp.data);
+      const expMonth = expDate.toLocaleString('pt-BR', { month: 'long' });
+      const monthMatch = selectedMonth === 'Tudo' || expMonth === selectedMonth;
+      return monthMatch;
     });
   }, [expenses, selectedMonth]);
 
@@ -64,7 +65,7 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
 
   const cashFlowData = useMemo(() => {
     return [{
-      name: selectedMonth === 'Tudo' ? 'Total Geral' : selectedMonth.toUpperCase(),
+      name: selectedMonth === 'Tudo' ? 'TOTAL' : selectedMonth.toUpperCase(),
       Entradas: totalFilteredIncome,
       Saídas: totalFilteredExpenses,
       Saldo: totalFilteredIncome - totalFilteredExpenses
@@ -72,27 +73,29 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
   }, [totalFilteredIncome, totalFilteredExpenses, selectedMonth]);
 
   const companyPerformance = useMemo(() => {
-    const summary: Record<string, { name: string; plataforma: number; idep: number; total: number }> = {};
+    const summary: Record<string, { name: string; plataforma: number; idep: number; total: number; bloqueira: number; agente: number }> = {};
     filteredEntries.forEach(item => {
       if (!summary[item.companyName]) {
-        summary[item.companyName] = { name: item.companyName, plataforma: 0, idep: 0, total: 0 };
+        summary[item.companyName] = { name: item.companyName, plataforma: 0, idep: 0, total: 0, bloqueira: 0, agente: 0 };
       }
       summary[item.companyName].plataforma += item.partialTotal;
+      summary[item.companyName].bloqueira += (item.bloqueiraValue || 0);
+      summary[item.companyName].agente += (item.agentValue || 0);
       summary[item.companyName].idep += (item.idep40hValue + item.idep20hValue);
       summary[item.companyName].total += item.totalGain;
     });
-    return Object.values(summary);
+    return Object.values(summary).sort((a, b) => b.total - a.total);
   }, [filteredEntries]);
 
-  const selectClasses = "bg-[#1e293b] border border-slate-700 text-white rounded-md px-2 py-1 text-[10px] focus:ring-1 focus:ring-[#22d3ee] outline-none cursor-pointer";
+  const selectClasses = "bg-[#1e293b] border border-slate-700 text-white rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer transition-all";
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#0f172a] border border-slate-800 p-2 rounded-lg shadow-xl">
-          <p className="text-[10px] font-bold text-white mb-1 uppercase tracking-tighter">{label}</p>
+        <div className="bg-[#0f172a] border border-slate-800 p-3 rounded-xl shadow-2xl">
+          <p className="text-[10px] font-black text-white mb-2 uppercase tracking-widest">{label}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-[9px] font-medium" style={{ color: entry.color || entry.fill }}>
+            <p key={index} className="text-[9px] font-bold" style={{ color: entry.color || entry.fill }}>
               {entry.name}: {formatCurrency(entry.value)}
             </p>
           ))}
@@ -119,46 +122,123 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="bg-[#1e293b]/20 p-4 rounded-2xl border border-slate-800 flex flex-wrap gap-6 items-center shadow-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Mês</span>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Filtros Estilo Dashboard */}
+      <div className="bg-[#0f172a] p-5 rounded-[2rem] border border-slate-800 flex flex-wrap gap-6 items-center shadow-2xl">
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">Período</span>
           <select className={selectClasses} value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
-            {months.map(m => <option key={m} value={m} className="bg-[#0f172a]">{m}</option>)}
+            {months.map(m => <option key={m} value={m} className="bg-[#0f172a]">{m.toUpperCase()}</option>)}
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Unidade</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">Unidade</span>
           <select className={selectClasses} value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
-            {companies.map(c => <option key={c} value={c} className="bg-[#0f172a]">{c}</option>)}
+            {companies.map(c => <option key={c} value={c} className="bg-[#0f172a]">{c.toUpperCase()}</option>)}
           </select>
+        </div>
+        <div className="ml-auto text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+           <RefreshCw className="w-3 h-3 animate-spin-slow" /> Dados Sincronizados
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#0f172a] p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-[11px] font-black text-white uppercase tracking-widest">Análise de Saídas</h3>
-              <p className="text-[9px] text-slate-500 uppercase font-bold">Por Canal de Pagamento</p>
+      {/* Relatório Principal: Entradas por Unidade */}
+      <div className="bg-[#0f172a] p-8 rounded-[3rem] shadow-2xl border border-slate-800">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-600/10 rounded-2xl">
+              <Building2 className="w-6 h-6 text-blue-500" />
             </div>
-            <div className="p-2 bg-rose-500/10 rounded-xl">
-              <CreditCard className="w-5 h-5 text-rose-500" />
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Entradas por Unidade Detalhadas</h3>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Análise de Performance Mensal</p>
+            </div>
+          </div>
+          <div className="text-right">
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Total Filtrado</span>
+             <h4 className="text-xl font-black text-cyan-400">{formatCurrency(totalFilteredIncome)}</h4>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {companyPerformance.map((company, idx) => (
+            <div key={company.name} className="p-6 bg-slate-900/30 rounded-3xl border border-slate-800/50 hover:border-slate-700 transition-all flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <span className="text-[9px] font-black text-slate-600 uppercase mb-1 block">#{idx + 1} Ranking</span>
+                  <h5 className="text-xs font-black text-white uppercase tracking-tight group-hover:text-blue-400 transition-colors">{company.name}</h5>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-white">{formatCurrency(company.total)}</span>
+                  <p className="text-[8px] font-bold text-slate-600 uppercase">{(totalFilteredIncome > 0 ? (company.total / totalFilteredIncome) * 100 : 0).toFixed(1)}% do total</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>
+                    <span className="text-slate-400">Bloqueira</span>
+                  </div>
+                  <span className="text-white">{formatCurrency(company.bloqueira)}</span>
+                </div>
+                <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                    <span className="text-slate-400">Agente</span>
+                  </div>
+                  <span className="text-white">{formatCurrency(company.agente)}</span>
+                </div>
+                <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-widest opacity-60">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-500"></div>
+                    <span className="text-slate-400">IDEP</span>
+                  </div>
+                  <span className="text-white">{formatCurrency(company.idep)}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 w-full bg-slate-950 h-2 rounded-full overflow-hidden flex">
+                <div className="bg-cyan-600 h-full" style={{ width: `${(company.bloqueira / (company.total || 1)) * 100}%` }}></div>
+                <div className="bg-indigo-600 h-full" style={{ width: `${(company.agente / (company.total || 1)) * 100}%` }}></div>
+                <div className="bg-slate-700 h-full" style={{ width: `${(company.idep / (company.total || 1)) * 100}%` }}></div>
+              </div>
+            </div>
+          ))}
+          {companyPerformance.length === 0 && (
+            <div className="col-span-full py-12 flex flex-col items-center gap-4 opacity-20">
+               <Building2 className="w-12 h-12" />
+               <p className="text-[10px] font-black uppercase tracking-[0.4em]">Nenhum dado encontrado para o período</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Gráficos Secundários */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-[#0f172a] p-8 rounded-[3rem] border border-slate-800 shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-600"></div>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-[11px] font-black text-white uppercase tracking-widest">Distribuição de Saídas</h3>
+              <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Gastos por Tipo</p>
+            </div>
+            <div className="p-3 bg-rose-500/10 rounded-2xl">
+              <CreditCard className="w-6 h-6 text-rose-500" />
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-            <div className="h-[200px] w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            <div className="h-[240px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={expenseDistribution}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={5}
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={8}
                     dataKey="value"
                   >
                     {expenseDistribution.map((entry, index) => (
@@ -169,47 +249,74 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {expenseDistribution.map((item, idx) => (
-                <div key={idx} className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/50">
+                <div key={idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 hover:bg-slate-800/50 transition-all">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.name}</span>
-                    <span className="text-[10px] font-bold text-white">{((item.value / totalFilteredExpenses) * 100).toFixed(1)}%</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{item.name}</span>
+                    <span className="text-[10px] font-black text-white">{(totalFilteredExpenses > 0 ? (item.value / totalFilteredExpenses) * 100 : 0).toFixed(1)}%</span>
                   </div>
-                  <p className="text-xs font-black text-white">{formatCurrency(item.value)}</p>
+                  <p className="text-sm font-black text-white">{formatCurrency(item.value)}</p>
                 </div>
               ))}
+              <div className="pt-2 border-t border-slate-800/50">
+                <div className="flex justify-between items-center px-4">
+                   <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Total Geral Saídas</span>
+                   <span className="text-sm font-black text-rose-500">{formatCurrency(totalFilteredExpenses)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-[#0f172a] p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-[#0f172a] p-8 rounded-[3rem] border border-slate-800 shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+          <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-[11px] font-black text-white uppercase tracking-widest">Fluxo de Caixa</h3>
-              <p className="text-[9px] text-slate-500 uppercase font-bold">Entradas vs Saídas</p>
+              <h3 className="text-[11px] font-black text-white uppercase tracking-widest">Fluxo Financeiro Consolidado</h3>
+              <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">DRE Simplificado</p>
             </div>
-            <div className="p-2 bg-blue-500/10 rounded-xl">
-              <Landmark className="w-5 h-5 text-blue-500" />
+            <div className="p-3 bg-blue-500/10 rounded-2xl">
+              <Landmark className="w-6 h-6 text-blue-500" />
             </div>
           </div>
           
-          <div className="h-[220px] w-full">
+          <div className="h-[240px] w-full mb-6">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashFlowData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-                <XAxis dataKey="name" fontSize={9} tick={{ fill: '#64748b' }} hide />
+                <XAxis dataKey="name" fontSize={10} tick={{ fill: '#64748b' }} hide />
                 <YAxis fontSize={9} tick={{ fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase' }} />
-                <Bar dataKey="Entradas" fill="#22d3ee" radius={[4, 4, 0, 0]} barSize={40} />
-                <Bar dataKey="Saídas" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={40} />
+                <Bar dataKey="Entradas" fill="#22d3ee" radius={[6, 6, 0, 0]} barSize={45} />
+                <Bar dataKey="Saídas" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={45} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          <div className="bg-slate-900/50 p-6 rounded-[2rem] border border-slate-800/50 flex items-center justify-between">
+             <div className="space-y-1">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">Lucro Líquido do Período</span>
+                <h4 className={`text-2xl font-black ${(totalFilteredIncome - totalFilteredExpenses) >= 0 ? 'text-blue-400' : 'text-rose-500'}`}>
+                  {formatCurrency(totalFilteredIncome - totalFilteredExpenses)}
+                </h4>
+             </div>
+             <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400">
+                {(totalFilteredIncome - totalFilteredExpenses) >= 0 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
+             </div>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+const RefreshCw = (props: any) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+    <path d="M3 21v-5h5"/>
+  </svg>
+);
