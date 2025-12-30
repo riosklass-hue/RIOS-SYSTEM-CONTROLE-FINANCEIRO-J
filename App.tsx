@@ -53,6 +53,19 @@ const App: React.FC = () => {
 
   const isMaster = currentUser?.username.toLowerCase() === 'admin';
 
+  // Carrega usuários logo no início para permitir login de múltiplos operadores
+  useEffect(() => {
+    const prefetchUsers = async () => {
+      try {
+        const usersData = await api.getUsers();
+        setUsers(Array.isArray(usersData) ? usersData : []);
+      } catch (e) {
+        console.warn("Não foi possível pré-carregar usuários da API.");
+      }
+    };
+    prefetchUsers();
+  }, []);
+
   const checkServerHealth = useCallback(async () => {
     try {
       const response = await api.checkStatus();
@@ -82,7 +95,7 @@ const App: React.FC = () => {
       setGoals(Array.isArray(goalsData) ? goalsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
     } catch (error) {
-      console.error("Erro na carga:", error);
+      console.error("Erro na carga de dados da nuvem:", error);
     } finally {
       setIsLoading(false);
     }
@@ -122,8 +135,8 @@ const App: React.FC = () => {
       } else {
         throw new Error('Invalido');
       }
-    } catch (err) {
-      setAuthError('Credenciais incorretas ou usuário não autorizado.');
+    } catch (err: any) {
+      setAuthError(err.message || 'Credenciais incorretas.');
     } finally {
       setIsLoading(false);
     }
@@ -137,17 +150,17 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // Funções de Persistência Atualizadas
+  // Persistência unificada (Nuvem + Local)
   const handleSaveUser = async (user: UserProfile) => {
-    const updatedUsers = users.find(u => u.id === user.id) 
-      ? users.map(u => u.id === user.id ? user : u) 
-      : [...users, user];
-    setUsers(updatedUsers);
+    setUsers(prev => {
+      const exists = prev.find(u => u.id === user.id);
+      return exists ? prev.map(u => u.id === user.id ? user : u) : [...prev, user];
+    });
     await api.saveUser(user);
   };
 
   const handleDeleteUser = async (id: string) => {
-    setUsers(users.filter(u => u.id !== id));
+    setUsers(prev => prev.filter(u => u.id !== id));
     await api.deleteUser(id);
   };
 
@@ -176,7 +189,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Sincronizando Sistema Rios...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Conectando à api.riossistem.com.br...</p>
       </div>
     );
   }
@@ -188,7 +201,7 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-rose-500 to-blue-600"></div>
           <RiosLogo className="w-16 h-16 mx-auto mb-6" />
           <h1 className="text-xl font-black text-white mb-2 tracking-[0.2em] uppercase">RIOS SYSTEM</h1>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Múltiplos Usuários Habilitados</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Acesso Multi-Usuário Ativado</p>
           
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
@@ -200,8 +213,9 @@ const App: React.FC = () => {
               <input type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
             {authError && <p className="text-rose-500 text-[10px] font-bold text-center bg-rose-500/10 py-3 rounded-xl border border-rose-500/20">{authError}</p>}
-            <button type="submit" className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95">Logar na Nuvem</button>
+            <button type="submit" className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95">Logar via Nuvem</button>
           </form>
+          <p className="mt-8 text-[8px] text-slate-600 uppercase font-black tracking-widest">Hostinger Security SSL Enabled</p>
         </div>
       </div>
     );
@@ -260,13 +274,13 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4 bg-slate-900/80 px-5 py-3 rounded-2xl border border-slate-800/50">
              <div className="flex items-center gap-4">
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Server className="w-3 h-3" /> API:</span>
-                  <span className="text-[10px] font-black text-white uppercase tracking-tighter">{apiStatus === 'online' ? (serverInfo?.servidor || 'Hostinger') : 'Local'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Server className="w-3 h-3" /> HOST:</span>
+                  <span className="text-[10px] font-black text-white uppercase tracking-tighter">riossistem.com.br</span>
                 </div>
                 <div className="w-[1px] h-6 bg-slate-800"></div>
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Clock className="w-3 h-3" /> Sinc:</span>
-                  <span className="text-[10px] font-mono font-bold text-blue-400">{serverInfo?.hora || '--:--:--'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Cloud className="w-3 h-3" /> STATUS:</span>
+                  <span className={`text-[10px] font-mono font-bold ${apiStatus === 'online' ? 'text-emerald-400' : 'text-amber-500'}`}>{apiStatus.toUpperCase()}</span>
                 </div>
              </div>
              <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all ${isSyncing ? 'opacity-50' : ''}`}>
