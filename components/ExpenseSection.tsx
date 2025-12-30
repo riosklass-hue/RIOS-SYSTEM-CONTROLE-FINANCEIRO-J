@@ -84,7 +84,8 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
     } as Record<ExpenseLocal, number>);
   }, [expenses]);
 
-  const totalGeral = Object.values(totalsByLocal).reduce((a, b) => a + b, 0);
+  // Fix: Explicitly cast to number[] to avoid 'unknown' type errors during reduce
+  const totalGeral = (Object.values(totalsByLocal) as number[]).reduce((a, b) => a + b, 0);
 
   const inputClasses = "w-full px-3 py-2 bg-[#1e293b] border border-slate-700 rounded-xl text-xs text-white focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 focus:outline-none transition-all placeholder-slate-500 shadow-inner";
   const labelClasses = "block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-[0.1em]";
@@ -158,13 +159,15 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
             {Object.entries(totalsByLocal).map(([name, total]) => (
               <div key={name} className="flex justify-between items-center p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 hover:border-slate-700 transition-all group">
                 <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{name}</span>
-                <span className="font-bold text-white text-sm">{formatCurrency(total)}</span>
+                {/* Fix: Cast 'total' to number to resolve unknown type error */}
+                <span className="font-bold text-white text-sm">{formatCurrency(total as number)}</span>
               </div>
             ))}
             <div className="pt-4 mt-2 border-t border-slate-800/50">
               <div className="flex justify-between items-center p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20">
                 <span className="text-rose-500 font-black uppercase text-[10px] tracking-[0.2em]">Total Geral</span>
-                <span className="font-black text-rose-500 text-lg">{formatCurrency(totalGeral)}</span>
+                {/* Fix: Cast 'totalGeral' to number to resolve unknown type error */}
+                <span className="font-black text-rose-500 text-lg">{formatCurrency(totalGeral as number)}</span>
               </div>
             </div>
           </div>
