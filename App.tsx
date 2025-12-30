@@ -53,19 +53,7 @@ const App: React.FC = () => {
 
   const isMaster = currentUser?.username.toLowerCase() === 'admin';
 
-  // Carrega usuários logo no início para permitir login de múltiplos operadores
-  useEffect(() => {
-    const prefetchUsers = async () => {
-      try {
-        const usersData = await api.getUsers();
-        setUsers(Array.isArray(usersData) ? usersData : []);
-      } catch (e) {
-        console.warn("Não foi possível pré-carregar usuários da API.");
-      }
-    };
-    prefetchUsers();
-  }, []);
-
+  // Sincronização de saúde do servidor
   const checkServerHealth = useCallback(async () => {
     try {
       const response = await api.checkStatus();
@@ -81,6 +69,11 @@ const App: React.FC = () => {
   }, []);
 
   const loadAllData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const [entriesData, expensesData, goalsData, usersData] = await Promise.all([
@@ -95,14 +88,23 @@ const App: React.FC = () => {
       setGoals(Array.isArray(goalsData) ? goalsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
     } catch (error) {
-      console.error("Erro na carga de dados da nuvem:", error);
+      console.error("Erro na carga de dados:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
+  // Carrega usuários iniciais para permitir login mesmo se a API falhar no primeiro acesso
   useEffect(() => {
+    const initialUsers = async () => {
+      try {
+        const u = await api.getUsers();
+        if (Array.isArray(u)) setUsers(u);
+      } catch(e) {}
+    };
+    initialUsers();
     checkServerHealth();
+    
     if (isAuthenticated) {
       loadAllData();
     } else {
@@ -150,12 +152,13 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // Persistência unificada (Nuvem + Local)
   const handleSaveUser = async (user: UserProfile) => {
+    // Atualiza estado local primeiro para feedback imediato
     setUsers(prev => {
       const exists = prev.find(u => u.id === user.id);
       return exists ? prev.map(u => u.id === user.id ? user : u) : [...prev, user];
     });
+    // Chama API (que agora garante persistência local se falhar)
     await api.saveUser(user);
   };
 
@@ -189,7 +192,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Conectando à api.riossistem.com.br...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Sincronizando Banco de Dados...</p>
       </div>
     );
   }
@@ -215,7 +218,7 @@ const App: React.FC = () => {
             {authError && <p className="text-rose-500 text-[10px] font-bold text-center bg-rose-500/10 py-3 rounded-xl border border-rose-500/20">{authError}</p>}
             <button type="submit" className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95">Logar via Nuvem</button>
           </form>
-          <p className="mt-8 text-[8px] text-slate-600 uppercase font-black tracking-widest">Hostinger Security SSL Enabled</p>
+          <p className="mt-8 text-[8px] text-slate-600 uppercase font-black tracking-widest">Hostinger Security Enabled</p>
         </div>
       </div>
     );
