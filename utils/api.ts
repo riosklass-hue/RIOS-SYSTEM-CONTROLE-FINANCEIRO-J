@@ -3,7 +3,7 @@
  * Configuração da API Rios System - PRODUÇÃO HOSTINGER
  * Fonte Única de Dados: Banco de Dados MySQL
  */
-const BASE_URL = 'https://fi.riossistem.com.br/api';
+const BASE_URL = '/api';
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${BASE_URL}/${endpoint}`;
