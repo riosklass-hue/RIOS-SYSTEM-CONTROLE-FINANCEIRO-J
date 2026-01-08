@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Target, X, Calculator } from 'lucide-react';
+import { Plus, Trash2, Edit2, Target, X, Calculator, AlertCircle } from 'lucide-react';
 import { Goal, Entry } from '../types';
 import { formatCurrency, getCompanySummaries } from '../utils/calculations';
 
@@ -14,6 +14,7 @@ interface Props {
 
 export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, onDelete }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Goal>>({
     code: '',
     companyName: '',
@@ -31,10 +32,25 @@ export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (formData.companyName) {
+      // Validação de Código Duplicado
+      if (formData.code) {
+        const isDuplicate = goals.some(g => 
+          g.code.trim().toUpperCase() === formData.code?.trim().toUpperCase() && 
+          g.id !== editingId
+        );
+
+        if (isDuplicate) {
+          setError(`O código "${formData.code}" já está em uso por outra unidade.`);
+          return;
+        }
+      }
+
       const goalData = {
         ...formData,
-        code: formData.code || '',
+        code: formData.code?.trim() || '',
         bloqueiraMeta: Number(formData.bloqueiraMeta) || 0,
         agentMeta: Number(formData.agentMeta) || 0,
         idep40hMeta: Number(formData.idep40hMeta) || 0,
@@ -55,6 +71,7 @@ export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, 
   const handleEdit = (goalName: string) => {
     const goal = goals.find(g => g.companyName === goalName);
     if (goal) {
+      setError(null);
       setEditingId(goal.id);
       setFormData({
         code: goal.code,
@@ -70,6 +87,7 @@ export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, 
 
   const cancelEdit = () => {
     setEditingId(null);
+    setError(null);
     setFormData({ code: '', companyName: '', bloqueiraMeta: undefined, agentMeta: undefined, idep40hMeta: undefined, idep20hMeta: undefined });
   };
 
@@ -98,7 +116,16 @@ export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
             <div>
               <label className={labelClasses}>Cód.</label>
-              <input type="text" placeholder="001" className={inputClasses} value={formData.code} onChange={e => setFormData({ ...formData, code: e.target.value })} />
+              <input 
+                type="text" 
+                placeholder="001" 
+                className={`${inputClasses} ${error ? 'border-rose-500/50 ring-1 ring-rose-500/20' : ''}`} 
+                value={formData.code} 
+                onChange={e => {
+                  setError(null);
+                  setFormData({ ...formData, code: e.target.value });
+                }} 
+              />
             </div>
             <div className="lg:col-span-1">
               <label className={labelClasses}>Empresa</label>
@@ -127,8 +154,15 @@ export const GoalSection: React.FC<Props> = ({ goals, entries, onAdd, onUpdate, 
             </div>
           </div>
 
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg animate-in fade-in slide-in-from-top-1 duration-200">
+              <AlertCircle className="w-3 h-3 text-rose-500" />
+              <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tight">{error}</span>
+            </div>
+          )}
+
           {/* Cálculo Automático de Plataforma (Real-time) - Excluindo IDEP */}
-          {(currentWeeklyPlat > 0) && (
+          {(currentWeeklyPlat > 0) && !error && (
             <div className="flex items-center gap-4 px-3 py-2 bg-blue-900/10 border border-blue-500/20 rounded-lg animate-in fade-in slide-in-from-left-2 duration-300">
               <div className="flex items-center gap-2 border-r border-blue-500/20 pr-4">
                 <Calculator className="w-3.5 h-3.5 text-blue-400" />

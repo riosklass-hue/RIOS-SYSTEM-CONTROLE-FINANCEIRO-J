@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Edit2, X, Filter, Download } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Plus, Trash2, Edit2, X, Filter, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { Entry, Goal, Expense } from '../types';
 import { formatCurrency, calculateEntries } from '../utils/calculations';
 
@@ -16,6 +16,10 @@ interface Props {
 export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd, onUpdate, onDelete }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterCompany, setFilterCompany] = useState<string>('GERAL');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const companySelectRef = useRef<HTMLSelectElement>(null);
+
   const [formData, setFormData] = useState<Partial<Entry>>({
     date: new Date().toISOString().split('T')[0],
     companyName: '',
@@ -27,25 +31,6 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
 
   const allCalculated = useMemo(() => calculateEntries(entries, goals), [entries, goals]);
   
-  const companySummaries = useMemo(() => {
-    const summaryMap: Record<string, number> = {};
-    const displayedCompanies = filterCompany === 'GERAL' 
-      ? goals 
-      : goals.filter(g => g.companyName === filterCompany);
-
-    displayedCompanies.forEach(g => {
-      summaryMap[g.companyName] = 0;
-    });
-
-    allCalculated.forEach(entry => {
-      if (summaryMap[entry.companyName] !== undefined) {
-        summaryMap[entry.companyName] += entry.totalGain;
-      }
-    });
-
-    return Object.entries(summaryMap).map(([name, total]) => ({ name, total }));
-  }, [allCalculated, goals, filterCompany]);
-
   const filteredEntries = useMemo(() => {
     if (filterCompany === 'GERAL') return allCalculated;
     return allCalculated.filter(e => e.companyName === filterCompany);
@@ -53,39 +38,14 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
 
   const totalGanhosExibidos = filteredEntries.reduce((acc, curr) => acc + curr.totalGain, 0);
   const totalGanhosGeral = allCalculated.reduce((acc, curr) => acc + curr.totalGain, 0);
-  
-  // CORREÇÃO: Usando 'valor' em vez de 'value' para evitar NaN
   const totalSaidas = expenses.reduce((acc, curr) => acc + (curr.valor || 0), 0);
   const emCaixa = totalGanhosGeral - totalSaidas;
 
-  const exportToCSV = () => {
-    const headers = ["Data", "Empresa", "Bloqueira", "Agente", "Parcial", "IDEP 40H", "IDEP 20H", "Total"];
-    const rows = filteredEntries.map(e => [
-      new Date(e.date).toLocaleDateString('pt-BR'),
-      e.companyName,
-      e.bloqueiraValue.toString().replace('.', ','),
-      e.agentValue.toString().replace('.', ','),
-      e.partialTotal.toString().replace('.', ','),
-      e.idep40hValue.toString().replace('.', ','),
-      e.idep20hValue.toString().replace('.', ','),
-      e.totalGain.toString().replace('.', ',')
-    ]);
-
-    const csvContent = [headers, ...rows].map(r => r.join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `relatorio_rios_${filterCompany.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.companyName && formData.date) {
+      setIsSaving(true);
+      
       const entryData = {
         ...formData,
         bloqueiraValue: Number(formData.bloqueiraValue) || 0,
@@ -94,21 +54,32 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
         idep20hValue: Number(formData.idep20hValue) || 0,
       } as Entry;
 
-      if (editingId) {
-        onUpdate({ ...entryData, id: editingId });
-        setEditingId(null);
-      } else {
-        onAdd({ ...entryData, id: crypto.randomUUID() });
+      try {
+        if (editingId) {
+          await onUpdate({ ...entryData, id: editingId });
+          setEditingId(null);
+        } else {
+          await onAdd({ ...entryData, id: crypto.randomUUID() });
+        }
+        
+        // Reset e feedback visual
+        setFormData(prev => ({ 
+          ...prev, 
+          companyName: '', 
+          bloqueiraValue: undefined, 
+          agentValue: undefined, 
+          idep40hValue: undefined, 
+          idep20hValue: undefined 
+        }));
+        
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+        
+        // Retorna o foco para a empresa para agilizar o próximo lançamento
+        companySelectRef.current?.focus();
+      } finally {
+        setIsSaving(false);
       }
-      
-      setFormData(prev => ({ 
-        ...prev, 
-        companyName: '', 
-        bloqueiraValue: undefined, 
-        agentValue: undefined, 
-        idep40hValue: undefined, 
-        idep20hValue: undefined 
-      }));
     }
   };
 
@@ -137,197 +108,159 @@ export const IncomeSection: React.FC<Props> = ({ entries, goals, expenses, onAdd
     }));
   };
 
-  const inputClasses = "w-full px-2 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-xs text-white focus:ring-1 focus:ring-[#22d3ee] focus:outline-none transition-all placeholder-slate-500";
-  const labelClasses = "block text-[9px] font-bold text-slate-400 uppercase mb-1 tracking-widest";
+  const inputClasses = "w-full px-3 py-2 bg-[#1e293b] border border-slate-700 rounded-xl text-xs text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all placeholder-slate-500 shadow-inner";
+  const labelClasses = "block text-[9px] font-black text-slate-500 uppercase mb-1 tracking-widest";
 
   return (
     <div className="space-y-4">
-      {/* Formulário */}
-      <div className={`bg-[#0f172a] p-4 rounded-xl shadow-2xl border transition-all ${editingId ? 'border-amber-500/50' : 'border-slate-800'}`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold flex items-center gap-2 text-white uppercase tracking-wider">
-            <div className={`p-1 rounded-md ${editingId ? 'bg-amber-500/10' : 'bg-[#0891b2]/10'}`}>
-              {editingId ? <Edit2 className="w-4 h-4 text-amber-500" /> : <Plus className="w-4 h-4 text-[#22d3ee]" />}
+      <div className={`bg-[#0f172a] p-6 rounded-[2.5rem] shadow-2xl border transition-all duration-300 ${editingId ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-800'}`}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-2xl ${editingId ? 'bg-amber-500/20' : 'bg-blue-600/20'}`}>
+              {editingId ? <Edit2 className="w-5 h-5 text-amber-500" /> : <Plus className="w-5 h-5 text-blue-500" />}
             </div>
-            {editingId ? 'Editar Entrada Detalhada' : 'Lançar Entrada Detalhada'}
-          </h2>
+            <div>
+              <h2 className="text-sm font-black text-white uppercase tracking-[0.2em] leading-none">
+                {editingId ? 'Alterar Lançamento' : 'Novo Lançamento Bruto'}
+              </h2>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter mt-1">Registrar faturamento por unidade</p>
+            </div>
+          </div>
           {editingId && (
-            <button onClick={cancelEdit} className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1">
-              <X className="w-3 h-3" /> Cancelar Edição
+            <button onClick={cancelEdit} className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 font-black uppercase tracking-widest">
+              <X className="w-4 h-4" /> Cancelar
             </button>
           )}
         </div>
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <div>
             <label className={labelClasses}>Data</label>
             <input type="date" className={inputClasses} value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
           </div>
           <div>
-            <label className={labelClasses}>Empresa</label>
-            <select className={inputClasses} value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required>
-              <option value="" className="bg-[#0f172a]">Selec...</option>
+            <label className={labelClasses}>Unidade</label>
+            <select ref={companySelectRef} className={inputClasses} value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required>
+              <option value="" className="bg-[#0f172a]">Selecione...</option>
               {goals.map(g => (
                 <option key={g.id} value={g.companyName} className="bg-[#0f172a]">
-                  {g.code ? `[${g.code}] ` : ''}{g.companyName}
+                  {g.code ? `${g.code} - ` : ''}{g.companyName}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label className={labelClasses}>Bloqueira (R$)</label>
-            <input type="number" step="0.01" className={inputClasses} value={formData.bloqueiraValue ?? ''} onChange={e => setFormData({ ...formData, bloqueiraValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
+            <input type="number" step="0.01" placeholder="0,00" className={inputClasses} value={formData.bloqueiraValue ?? ''} onChange={e => setFormData({ ...formData, bloqueiraValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
           </div>
           <div>
             <label className={labelClasses}>Agente (R$)</label>
-            <input type="number" step="0.01" className={inputClasses} value={formData.agentValue ?? ''} onChange={e => setFormData({ ...formData, agentValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
+            <input type="number" step="0.01" placeholder="0,00" className={inputClasses} value={formData.agentValue ?? ''} onChange={e => setFormData({ ...formData, agentValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
           </div>
           <div>
             <label className={labelClasses}>IDEP 40H (R$)</label>
-            <input type="number" step="0.01" className={inputClasses} value={formData.idep40hValue ?? ''} onChange={e => setFormData({ ...formData, idep40hValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
+            <input type="number" step="0.01" placeholder="0,00" className={inputClasses} value={formData.idep40hValue ?? ''} onChange={e => setFormData({ ...formData, idep40hValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
           </div>
           <div>
             <label className={labelClasses}>IDEP 20H (R$)</label>
-            <input type="number" step="0.01" className={inputClasses} value={formData.idep20hValue ?? ''} onChange={e => setFormData({ ...formData, idep20hValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
+            <input type="number" step="0.01" placeholder="0,00" className={inputClasses} value={formData.idep20hValue ?? ''} onChange={e => setFormData({ ...formData, idep20hValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
           </div>
           <div className="flex items-end">
-            <button type="submit" className={`w-full text-white px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all h-[34px] ${editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#0891b2] hover:bg-[#06b6d4]'}`}>
-              {editingId ? 'Salvar' : 'Lançar'}
+            <button 
+              type="submit" 
+              disabled={isSaving}
+              className={`w-full text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl ${
+                saveSuccess ? 'bg-emerald-600' : (editingId ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500')
+              }`}
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess ? <CheckCircle2 className="w-4 h-4" /> : (editingId ? 'Salvar' : 'Lançar')}
             </button>
           </div>
         </form>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        {/* Tabela Principal */}
         <div className="xl:col-span-3 space-y-4">
-          <div className="bg-[#0f172a] rounded-xl shadow-2xl border border-slate-800 overflow-hidden">
-            <div className="p-3 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300">Lançamentos</h3>
+          <div className="bg-[#0f172a] rounded-[2.5rem] shadow-2xl border border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-800 bg-slate-900/30 flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Histórico de Movimentação</h3>
               <div className="flex items-center gap-3">
-                <button 
-                  onClick={exportToCSV}
-                  className="flex items-center gap-2 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase transition-all"
+                <Filter className="w-3.5 h-3.5 text-slate-500" />
+                <select 
+                  className="bg-slate-800 border border-slate-700 text-[10px] text-white rounded-xl px-4 py-2 font-black uppercase tracking-widest outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/50"
+                  value={filterCompany}
+                  onChange={(e) => setFilterCompany(e.target.value)}
                 >
-                  <Download className="w-3 h-3" /> Excel
-                </button>
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-slate-500" />
-                  <select 
-                    className="bg-slate-800 border border-slate-700 text-[10px] text-white rounded px-2 py-1 focus:ring-1 focus:ring-[#22d3ee] outline-none"
-                    value={filterCompany}
-                    onChange={(e) => setFilterCompany(e.target.value)}
-                  >
-                    <option value="GERAL">FILTRAR: GERAL</option>
-                    {goals.map(g => (
-                      <option key={g.id} value={g.companyName}>{g.companyName}</option>
-                    ))}
-                  </select>
-                </div>
+                  <option value="GERAL">VISÃO GERAL</option>
+                  {goals.map(g => <option key={g.id} value={g.companyName}>{g.companyName.toUpperCase()}</option>)}
+                </select>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-900/50 text-slate-400 border-b border-slate-800">
-                    <th colSpan={2} className="px-3 py-2 text-[8px] font-bold uppercase border-r border-slate-800">Geral</th>
-                    <th colSpan={3} className="px-3 py-2 text-[8px] font-bold uppercase border-r border-slate-800 text-center bg-blue-900/10">Plataforma</th>
-                    <th colSpan={2} className="px-3 py-2 text-[8px] font-bold uppercase border-r border-slate-800 text-center bg-emerald-900/10">IDEP</th>
-                    <th className="px-3 py-2 text-[8px] font-bold uppercase border-r border-slate-800">Resumo</th>
-                    <th colSpan={2} className="px-3 py-2 text-[8px] font-bold uppercase text-center bg-rose-900/10">Diferença Meta (Mensal)</th>
-                    <th className="px-3 py-2 text-[8px] font-bold uppercase text-right">Ação</th>
-                  </tr>
-                  <tr className="bg-slate-950 text-slate-500 text-[7px] font-bold uppercase border-b border-slate-800">
-                    <th className="px-3 py-2 border-r border-slate-800">Data</th>
-                    <th className="px-3 py-2 border-r border-slate-800">Empresa</th>
-                    <th className="px-3 py-2 bg-blue-950/20 border-r border-slate-800">Bloqueira</th>
-                    <th className="px-3 py-2 bg-blue-950/20 border-r border-slate-800">Agente</th>
-                    <th className="px-3 py-2 bg-blue-950/30 border-r border-slate-800 font-black text-blue-400">Parcial</th>
-                    <th className="px-3 py-2 bg-emerald-950/20 border-r border-slate-800">40H</th>
-                    <th className="px-3 py-2 bg-emerald-950/20 border-r border-slate-800">20H</th>
-                    <th className="px-3 py-2 border-r border-slate-800 font-black text-cyan-400">Total</th>
-                    <th className="px-3 py-2 bg-rose-950/20 border-r border-slate-800">Dif. Bloq.</th>
-                    <th className="px-3 py-2 bg-rose-950/20 border-r border-slate-800">Dif. Agente</th>
-                    <th className="px-3 py-2 text-right whitespace-nowrap">Opções</th>
+                  <tr className="bg-slate-900/50 text-slate-500 border-b border-slate-800">
+                    <th colSpan={2} className="px-5 py-4 text-[8px] font-black uppercase tracking-widest border-r border-slate-800">IDENTIFICAÇÃO</th>
+                    <th colSpan={3} className="px-5 py-4 text-[8px] font-black uppercase tracking-widest border-r border-slate-800 text-center bg-blue-900/10">PLATAFORMA BRUTA</th>
+                    <th colSpan={2} className="px-5 py-4 text-[8px] font-black uppercase tracking-widest border-r border-slate-800 text-center bg-emerald-900/10">IDEP</th>
+                    <th className="px-5 py-4 text-[8px] font-black uppercase tracking-widest border-r border-slate-800">TOTAL</th>
+                    <th className="px-5 py-4 text-[8px] font-black uppercase tracking-widest text-right">AÇÕES</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {filteredEntries.map((row) => (
-                    <tr key={row.id} className={`hover:bg-slate-800/20 transition-colors bg-[#0f172a] text-[9px] ${editingId === row.id ? 'bg-amber-500/5' : ''}`}>
-                      <td className="px-3 py-1.5 font-mono text-slate-400 border-r border-slate-800">{new Date(row.date).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-3 py-1.5 font-bold text-slate-100 border-r border-slate-800">{row.companyName}</td>
-                      <td className="px-3 py-1.5 text-slate-300 border-r border-slate-800 bg-blue-950/5">{formatCurrency(row.bloqueiraValue)}</td>
-                      <td className="px-3 py-1.5 text-slate-300 border-r border-slate-800 bg-blue-950/5">{formatCurrency(row.agentValue)}</td>
-                      <td className="px-3 py-1.5 font-black text-blue-300 border-r border-slate-800 bg-blue-950/10">{formatCurrency(row.partialTotal)}</td>
-                      <td className="px-3 py-1.5 text-slate-300 border-r border-slate-800 bg-emerald-950/5">{formatCurrency(row.idep40hValue)}</td>
-                      <td className="px-3 py-1.5 text-slate-300 border-r border-slate-800 bg-emerald-950/5">{formatCurrency(row.idep20hValue)}</td>
-                      <td className="px-3 py-1.5 font-black text-cyan-400 border-r border-slate-800 bg-slate-900/40">{formatCurrency(row.totalGain)}</td>
-                      <td className={`px-3 py-1.5 border-r border-slate-800 bg-rose-950/5 font-medium ${row.diffBloqueira >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {formatCurrency(row.diffBloqueira)}
-                      </td>
-                      <td className={`px-3 py-1.5 border-r border-slate-800 bg-rose-950/5 font-medium ${row.diffAgent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {formatCurrency(row.diffAgent)}
-                      </td>
-                      <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => handleEdit(row)} className="p-1 text-slate-500 hover:text-blue-400 bg-slate-800/30 rounded-md transition-colors">
-                            <Edit2 className="w-3 h-3" />
+                    <tr key={row.id} className={`hover:bg-slate-800/20 transition-colors bg-[#0f172a] text-[9px] group ${editingId === row.id ? 'bg-amber-500/10' : ''}`}>
+                      <td className="px-5 py-3 font-mono text-slate-500 border-r border-slate-800">{new Date(row.date).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-5 py-3 font-black text-slate-200 border-r border-slate-800 uppercase tracking-tighter truncate max-w-[100px]">{row.companyName}</td>
+                      <td className="px-5 py-3 text-slate-400 border-r border-slate-800 bg-blue-950/5">{formatCurrency(row.bloqueiraValue)}</td>
+                      <td className="px-5 py-3 text-slate-400 border-r border-slate-800 bg-blue-950/5">{formatCurrency(row.agentValue)}</td>
+                      <td className="px-5 py-3 font-black text-blue-400 border-r border-slate-800 bg-blue-950/10">{formatCurrency(row.partialTotal)}</td>
+                      <td className="px-5 py-3 text-slate-400 border-r border-slate-800 bg-emerald-950/5">{formatCurrency(row.idep40hValue)}</td>
+                      <td className="px-5 py-3 text-slate-400 border-r border-slate-800 bg-emerald-950/5">{formatCurrency(row.idep20hValue)}</td>
+                      <td className="px-5 py-3 font-black text-white border-r border-slate-800 bg-slate-900/40 italic">{formatCurrency(row.totalGain)}</td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-30 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleEdit(row)} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800 rounded-lg">
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => onDelete(row.id)} className="p-1 text-slate-600 hover:text-rose-500 bg-slate-800/30 rounded-md transition-colors">
-                            <Trash2 className="w-3 h-3" />
+                          <button onClick={() => onDelete(row.id)} className="p-2 text-slate-400 hover:text-rose-500 bg-slate-800 rounded-lg">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {filteredEntries.length === 0 && (
-                    <tr>
-                      <td colSpan={11} className="px-4 py-8 text-center text-slate-600 italic">Nenhum registro encontrado para este filtro.</td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        {/* Quadro Lateral de Totais por Empresa */}
         <div className="space-y-4">
-          <div className="bg-[#0f172a] rounded-xl shadow-2xl border border-slate-800 overflow-hidden h-fit">
-            <div className="p-3 border-b border-slate-800 bg-slate-900/30">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300">Resumo de Saldo</h3>
+          <div className="bg-[#0f172a] rounded-[2rem] shadow-2xl border border-slate-800 overflow-hidden h-fit">
+            <div className="p-4 border-b border-slate-800 bg-slate-900/40">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Fluxo de Caixa</h3>
             </div>
             <div className="divide-y divide-slate-800">
-              {companySummaries.map(company => (
-                <div key={company.name} className="flex justify-between items-center px-4 py-2.5 hover:bg-slate-800/30 transition-all group">
-                  <span className="text-[10px] font-black text-slate-400 uppercase group-hover:text-white transition-colors">{company.name}</span>
-                  <span className="text-[11px] font-bold text-slate-200">{formatCurrency(company.total)}</span>
+              <div className="bg-slate-900/50 text-slate-400 px-5 py-4 flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase tracking-widest">BRUTO ACUMULADO</span>
+                <span className="text-sm font-black text-white">{formatCurrency(totalGanhosGeral)}</span>
+              </div>
+              <div className="bg-slate-900/80 text-rose-500 px-5 py-4 flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase tracking-widest">TOTAL SAÍDAS</span>
+                <span className="text-sm font-black">{formatCurrency(totalSaidas)}</span>
+              </div>
+              <div className="bg-blue-600 text-white px-5 py-6 flex justify-between items-center shadow-[inset_0_2px_15px_rgba(0,0,0,0.3)]">
+                <div className="flex flex-col">
+                   <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Saldo Disponível</span>
+                   <span className="text-lg font-black">{formatCurrency(emCaixa)}</span>
                 </div>
-              ))}
-              
-              <div className="bg-yellow-400/90 text-black px-4 py-2.5 flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase">GANHO TOTAL</span>
-                <span className="text-xs font-black">{formatCurrency(totalGanhosGeral)}</span>
-              </div>
-              <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase">SAÍDA GERAL</span>
-                <span className="text-xs font-black">{formatCurrency(totalSaidas)}</span>
-              </div>
-              <div className="bg-yellow-500 text-black px-4 py-2.5 flex justify-between items-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]">
-                <span className="text-[10px] font-black uppercase">SALDO EM CAIXA</span>
-                <span className="text-sm font-black">{formatCurrency(emCaixa)}</span>
+                <div className="p-3 bg-white/20 rounded-2xl">
+                   <CheckCircle2 className="w-6 h-6" />
+                </div>
               </div>
             </div>
           </div>
-          
-          {filterCompany !== 'GERAL' && (
-             <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-3 animate-in fade-in zoom-in duration-300">
-                <h4 className="text-[10px] font-black text-blue-400 uppercase mb-1">Visualização: {filterCompany}</h4>
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] text-slate-400">Total Unidade:</span>
-                  <span className="text-xs font-bold text-white">{formatCurrency(totalGanhosExibidos)}</span>
-                </div>
-             </div>
-          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, WifiOff, Cloud, Server, Database, Crown } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, WifiOff, Cloud, Server, Database, Crown, CheckCircle2 } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -110,51 +110,52 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // HANDLERS UNIFICADOS PARA GARANTIR REGISTRO
   const handleAction = async (type: 'entry' | 'expense' | 'goal' | 'user', action: 'save' | 'delete', data: any) => {
-    try {
+    // 1. Otimismo na UI: Atualiza a tela imediatamente com lógica de 'Upsert'
+    if (action === 'save') {
       if (type === 'entry') {
-        if (action === 'save') {
-          const updated = data.id ? entries.map(x => x.id === data.id ? data : x) : [...entries, data];
-          setEntries(updated);
-          await api.saveEntry(data);
-        } else {
-          setEntries(entries.filter(x => x.id !== data));
-          await api.deleteEntry(data);
-        }
+        setEntries(prev => {
+          const exists = prev.some(x => x.id === data.id);
+          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
+        });
+        await api.saveEntry(data);
       } else if (type === 'expense') {
-        if (action === 'save') {
-          const updated = data.id ? expenses.map(x => x.id === data.id ? data : x) : [...expenses, data];
-          setExpenses(updated);
-          await api.saveExpense(data);
-        } else {
-          setExpenses(expenses.filter(x => x.id !== data));
-          await api.deleteExpense(data);
-        }
+        setExpenses(prev => {
+          const exists = prev.some(x => x.id === data.id);
+          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
+        });
+        await api.saveExpense(data);
       } else if (type === 'goal') {
-        if (action === 'save') {
-          const updated = data.id ? goals.map(x => x.id === data.id ? data : x) : [...goals, data];
-          setGoals(updated);
-          await api.saveGoal(data);
-        } else {
-          setGoals(goals.filter(x => x.id !== data));
-          await api.deleteGoal(data);
-        }
+        setGoals(prev => {
+          const exists = prev.some(x => x.id === data.id);
+          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
+        });
+        await api.saveGoal(data);
       } else if (type === 'user') {
-        if (action === 'save') {
-          const updated = data.id ? users.map(x => x.id === data.id ? data : x) : [...users, data];
-          setUsers(updated);
-          await api.saveUser(data);
-        } else {
-          setUsers(users.filter(x => x.id !== data));
-          await api.deleteUser(data);
-        }
+        setUsers(prev => {
+          const exists = prev.some(x => x.id === data.id);
+          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
+        });
+        await api.saveUser(data);
       }
-      // Re-sincroniza em background sem loader
-      loadAllData(false);
-    } catch (e) {
-      console.error("Erro ao registrar informação:", e);
+    } else if (action === 'delete') {
+      if (type === 'entry') {
+        setEntries(prev => prev.filter(x => x.id !== data));
+        await api.deleteEntry(data);
+      } else if (type === 'expense') {
+        setExpenses(prev => prev.filter(x => x.id !== data));
+        await api.deleteExpense(data);
+      } else if (type === 'goal') {
+        setGoals(prev => prev.filter(x => x.id !== data));
+        await api.deleteGoal(data);
+      } else if (type === 'user') {
+        setUsers(prev => prev.filter(x => x.id !== data));
+        await api.deleteUser(data);
+      }
     }
+    
+    // 2. Sincronização em background para garantir integridade com o servidor
+    loadAllData(false);
   };
 
   const totals = useMemo(() => {
@@ -182,7 +183,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Registrando Informações...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Protegendo sua Conexão...</p>
       </div>
     );
   }
@@ -194,20 +195,20 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-rose-500 to-blue-600"></div>
           <RiosLogo className="w-16 h-16 mx-auto mb-6" />
           <h1 className="text-xl font-black text-white mb-2 tracking-[0.2em] uppercase">RIOS SYSTEM</h1>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Gestão de Dados Protegida</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Gestão e Tecnologia Financeira</p>
           
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Acesso</label>
-              <input type="text" placeholder="Operador" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={username} onChange={e => setUsername(e.target.value)} required />
+              <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Login Operador</label>
+              <input type="text" placeholder="Acesso" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={username} onChange={e => setUsername(e.target.value)} required />
             </div>
             <div>
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Senha</label>
+              <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Senha Segura</label>
               <input type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
             {authError && <p className="text-rose-500 text-[10px] font-bold text-center bg-rose-500/10 py-3 rounded-xl border border-rose-500/20">{authError}</p>}
             <button type="submit" disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50">
-              {isSyncing ? 'Verificando...' : 'Entrar no Sistema'}
+              {isSyncing ? 'Autenticando...' : 'Entrar'}
             </button>
           </form>
         </div>
@@ -258,17 +259,17 @@ const App: React.FC = () => {
 
       <footer className="bg-[#0f172a] border-t border-slate-800 py-6 px-4">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-600 text-[9px] font-black tracking-widest uppercase italic">Sistema Rios &copy; 2025</p>
+          <p className="text-slate-600 text-[9px] font-black tracking-widest uppercase italic">Tecnologia Rios &copy; 2025</p>
           <div className="flex items-center gap-4 bg-slate-900/80 px-5 py-3 rounded-2xl border border-slate-800/50">
              <div className="flex items-center gap-4">
                 <div className="flex flex-col">
                   <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Database className="w-3 h-3" /> REGISTROS:</span>
-                  <span className="text-[10px] font-black text-white uppercase tracking-tighter">{(entries.length + expenses.length + goals.length)} itens salvos</span>
+                  <span className="text-[10px] font-black text-white uppercase tracking-tighter">{(entries.length + expenses.length + goals.length)} lançamentos salvos</span>
                 </div>
                 <div className="w-[1px] h-6 bg-slate-800"></div>
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Cloud className="w-3 h-3" /> NUVEM:</span>
-                  <span className={`text-[10px] font-mono font-bold ${apiStatus === 'online' ? 'text-emerald-400' : 'text-amber-500'}`}>{apiStatus === 'online' ? 'SINCRONIZADO' : 'LOCAL (OFFLINE)'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Cloud className="w-3 h-3" /> STATUS:</span>
+                  <span className={`text-[10px] font-mono font-bold ${apiStatus === 'online' ? 'text-emerald-400' : 'text-amber-500'}`}>{apiStatus === 'online' ? 'SINCRONIZADO' : 'LOCAL-FIRST'}</span>
                 </div>
              </div>
              <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all ${isSyncing ? 'opacity-50' : ''}`}>
