@@ -1,18 +1,11 @@
 
 /**
- * Configuração da API Rios System para Hostinger
- * Endpoint centralizado no banco MySQL
+ * Configuração da API Rios System - PRODUÇÃO HOSTINGER
+ * Fonte Única de Dados: Banco de Dados MySQL
  */
 const BASE_URL = 'https://fi.riossistem.com.br/api';
 
-const STORAGE_KEYS = {
-  ENTRIES: 'rios_cache_entries',
-  EXPENSES: 'rios_cache_expenses',
-  GOALS: 'rios_cache_goals',
-  USERS: 'rios_cache_users'
-};
-
-async function request(endpoint: string, options: RequestInit = {}, storageKey?: string) {
+async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${BASE_URL}/${endpoint}`;
   
   try {
@@ -24,21 +17,20 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
       },
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (storageKey && Array.isArray(data)) {
-        localStorage.setItem(storageKey, JSON.stringify(data));
-      }
-      return data;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Erro na API: ${response.status}`);
     }
-    throw new Error(`Erro API: ${response.statusText}`);
-  } catch (error) {
-    console.warn(`Operando em modo offline para ${endpoint}`);
-    return storageKey ? JSON.parse(localStorage.getItem(storageKey) || '[]') : null;
+
+    return await response.json();
+  } catch (error: any) {
+    console.error(`Falha crítica na comunicação com o servidor: ${endpoint}`, error);
+    throw error; // Propaga o erro para ser tratado pela UI
   }
 }
 
 export const api = {
+  /** Verifica se o banco de dados e servidor estão operacionais */
   checkStatus: async () => {
     try {
       const res = await fetch(`${BASE_URL}/health`);
@@ -46,31 +38,31 @@ export const api = {
     } catch (e) { return false; }
   },
   
-  // Faturamento
-  getEntries: () => request('faturamento/listar', {}, STORAGE_KEYS.ENTRIES),
+  // FATURAMENTO (MYSQL)
+  getEntries: () => request('faturamento/listar'),
   saveEntry: (e: any) => request('faturamento/salvar', { 
     method: 'POST', 
     body: JSON.stringify(e) 
-  }, STORAGE_KEYS.ENTRIES),
-  deleteEntry: (id: string) => request(`faturamento/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.ENTRIES),
+  }),
+  deleteEntry: (id: string) => request(`faturamento/excluir/${id}`, { method: 'DELETE' }),
   
-  // Saídas
-  getExpenses: () => request('saidas/listar', {}, STORAGE_KEYS.EXPENSES),
+  // SAÍDAS / DESPESAS (MYSQL)
+  getExpenses: () => request('saidas/listar'),
   saveExpense: (e: any) => request('saidas/salvar', { 
     method: 'POST', 
     body: JSON.stringify(e) 
-  }, STORAGE_KEYS.EXPENSES),
-  deleteExpense: (id: string) => request(`saidas/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.EXPENSES),
+  }),
+  deleteExpense: (id: string) => request(`saidas/excluir/${id}`, { method: 'DELETE' }),
   
-  // Metas
-  getGoals: () => request('goals/listar', {}, STORAGE_KEYS.GOALS),
+  // UNIDADES E METAS (MYSQL)
+  getGoals: () => request('goals/listar'),
   saveGoal: (e: any) => request('goals/salvar', { 
     method: 'POST', 
     body: JSON.stringify(e) 
-  }, STORAGE_KEYS.GOALS),
-  deleteGoal: (id: string) => request(`goals/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.GOALS),
+  }),
+  deleteGoal: (id: string) => request(`goals/excluir/${id}`, { method: 'DELETE' }),
 
-  // Autenticação Real
+  // AUTENTICAÇÃO REAL (MYSQL)
   authenticate: async (credentials: any) => {
     return request('auth/login', { 
       method: 'POST', 
@@ -78,7 +70,11 @@ export const api = {
     });
   },
 
-  getUsers: () => request('users/listar', {}, STORAGE_KEYS.USERS),
-  saveUser: (u: any) => request('users/salvar', { method: 'POST', body: JSON.stringify(u) }, STORAGE_KEYS.USERS),
-  deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.USERS)
+  // GESTÃO DE EQUIPE (MYSQL)
+  getUsers: () => request('users/listar'),
+  saveUser: (u: any) => request('users/salvar', { 
+    method: 'POST', 
+    body: JSON.stringify(u) 
+  }),
+  deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' })
 };
