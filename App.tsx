@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, AlertTriangle, WifiOff, Zap, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -22,7 +22,6 @@ const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) =
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('rios_auth') === 'true');
-  const [isEmergencyMode, setIsEmergencyMode] = useState<boolean>(() => localStorage.getItem('rios_emergency') === 'true');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('rios_user');
     return saved ? JSON.parse(saved) : null;
@@ -57,7 +56,6 @@ const App: React.FC = () => {
   const isMaster = currentUser?.username.toLowerCase() === 'admin';
 
   const loadAllData = useCallback(async (showLoader = true) => {
-    // Só mostramos o carregador se não houver dados locais
     const hasData = entries.length > 0 || expenses.length > 0;
     if (showLoader && !hasData) setIsLoading(true);
     
@@ -105,45 +103,23 @@ const App: React.FC = () => {
       if (response && response.user) {
         setCurrentUser(response.user);
         setIsAuthenticated(true);
-        setIsEmergencyMode(false);
         localStorage.setItem('rios_auth', 'true');
-        localStorage.setItem('rios_emergency', 'false');
         localStorage.setItem('rios_user', JSON.stringify(response.user));
       } else {
         setAuthError('Credenciais não reconhecidas no banco.');
       }
     } catch (err: any) {
-      setAuthError('Falha de conexão. Use o modo de contingência.');
+      setAuthError('Falha de conexão com o servidor Hostinger.');
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleEmergencyAccess = () => {
-    const emergencyUser = {
-      id: 'admin',
-      username: 'admin',
-      password: '1234',
-      displayName: 'Acesso Offline',
-      email: 'admin@riossistem.com.br'
-    };
-    setCurrentUser(emergencyUser);
-    setIsAuthenticated(true);
-    setIsEmergencyMode(true);
-    setIsServerDown(true);
-    localStorage.setItem('rios_auth', 'true');
-    localStorage.setItem('rios_emergency', 'true');
-    localStorage.setItem('rios_user', JSON.stringify(emergencyUser));
-  };
-
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setIsEmergencyMode(false);
     setCurrentUser(null);
     setActiveTab('dashboard');
-    // REMOVEMOS apenas os dados de sessão, mantendo os dados locais
     localStorage.removeItem('rios_auth');
-    localStorage.removeItem('rios_emergency');
     localStorage.removeItem('rios_user');
   };
 
@@ -175,7 +151,7 @@ const App: React.FC = () => {
         else if (type === 'user') await api.deleteUser(data);
       }
     } catch (err) {
-      console.error("Falha ao sincronizar. Mantido em cache local.");
+      console.error("Erro na sincronização.");
     } finally {
       setIsSyncing(false);
     }
@@ -206,7 +182,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Iniciando Rios System...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Carregando Rios System...</p>
       </div>
     );
   }
@@ -223,26 +199,21 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-rose-500 to-blue-600"></div>
           <RiosLogo className="w-16 h-16 mx-auto mb-6" />
           <h1 className="text-xl font-black text-white mb-2 tracking-[0.2em] uppercase">RIOS SYSTEM</h1>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Acesso Hostinger Cloud</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Acesso ao Banco de Dados</p>
           
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
               <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Usuário</label>
-              <input type="text" placeholder="admin" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={username} onChange={e => setUsername(e.target.value)} required />
+              <input type="text" placeholder="Nome do operador" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={username} onChange={e => setUsername(e.target.value)} required />
             </div>
             <div>
               <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Senha</label>
-              <input type="password" placeholder="1234" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input type="password" placeholder="••••" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
             {authError && (
-              <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
-                <div className="flex gap-3 items-center">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-                  <p className="text-rose-500 text-[10px] font-bold">{authError}</p>
-                </div>
-                <button type="button" onClick={handleEmergencyAccess} className="mt-2 text-[9px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1.5 underline">
-                   <Zap className="w-3 h-3 text-amber-500" /> Acesso de Contingência
-                </button>
+              <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                <p className="text-rose-500 text-[10px] font-bold">{authError}</p>
               </div>
             )}
             <button type="submit" disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
@@ -256,12 +227,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#020617] text-slate-100">
-      {(isEmergencyMode || isServerDown) && (
-        <div className="bg-amber-600 text-white py-1.5 px-4 text-center text-[9px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3">
-          <Zap className="w-3 h-3 animate-pulse" /> Modo Offline Ativo: Dados salvos localmente.
-        </div>
-      )}
-
       <header className="bg-[#0f172a]/95 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50 px-4 py-4 shadow-2xl">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">

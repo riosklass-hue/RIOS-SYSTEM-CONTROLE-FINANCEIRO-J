@@ -10,6 +10,55 @@ app.use(express.json());
 // Rota de Saúde
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// --- AUTENTICAÇÃO ---
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+    if (rows.length > 0) {
+      const user = rows[0];
+      // Não enviamos a senha de volta por segurança
+      delete user.password;
+      res.json({ user });
+    } else {
+      res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- USUÁRIOS (EQUIPE) ---
+app.get('/api/users/listar', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT id, username, displayName, email FROM users');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/users/salvar', async (req, res) => {
+  const { id, username, password, displayName, email } = req.body;
+  try {
+    await db.query(`
+      INSERT INTO users (id, username, password, displayName, email)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        username = VALUES(username),
+        password = VALUES(password),
+        displayName = VALUES(displayName),
+        email = VALUES(email)
+    `, [id, username, password, displayName, email]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/users/excluir/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // --- FATURAMENTO ---
 app.get('/api/faturamento/listar', async (req, res) => {
   try {
