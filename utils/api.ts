@@ -1,7 +1,7 @@
 
 /**
  * Configuração da API Rios System - PRODUÇÃO HOSTINGER
- * Arquitetura: Local-First (Persistência Independente de Sessão)
+ * Arquitetura: Local-First com Sincronização MySQL Cloud
  */
 const BASE_URL = 'https://fi.riossistem.com.br/api';
 
@@ -26,7 +26,7 @@ const saveLocal = (key: string, data: any) => {
 async function request(endpoint: string, options: RequestInit = {}, storageKey?: string) {
   const url = `${BASE_URL}/${endpoint}`;
   
-  // 1. ATUALIZAÇÃO OTIMISTA LOCAL: Se for escrita, salva no navegador antes de tentar a rede
+  // Se for uma operação de escrita, atualiza o local imediatamente para garantir fluidez
   if (storageKey && options.method && options.method !== 'GET') {
     const localData = getLocal(storageKey);
     const bodyData = options.body ? JSON.parse(options.body as string) : {};
@@ -45,7 +45,7 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout agressivo para não travar a UI
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduzido para 5s para evitar travamento visual
 
     const response = await fetch(url, {
       ...options,
@@ -62,17 +62,15 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
 
     if (response.ok) {
       const data = await response.json();
-      // 2. SINCRONIZAÇÃO: Se o servidor respondeu com sucesso, atualiza o cache local
       if (storageKey && Array.isArray(data)) {
         saveLocal(storageKey, data);
       }
       return data;
     }
   } catch (error) {
-    console.warn(`[Offline] Servidor Hostinger inacessível. Usando base local para: ${endpoint}`);
+    console.warn(`Servidor Hostinger Offline ou lento. Operação mantida localmente.`);
   }
 
-  // 3. FALLBACK: Se falhar ou estiver offline, retorna o que tem no navegador
   return storageKey ? getLocal(storageKey) : null;
 }
 
@@ -84,15 +82,15 @@ export const api = {
     } catch (e) { return false; }
   },
   
-  getEntries: () => request('faturamento/listar', { method: 'GET' }, STORAGE_KEYS.ENTRIES),
+  getEntries: () => request('faturamento/listar', {}, STORAGE_KEYS.ENTRIES),
   saveEntry: (e: any) => request('faturamento/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.ENTRIES),
   deleteEntry: (id: string) => request(`faturamento/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.ENTRIES),
   
-  getExpenses: () => request('saidas/listar', { method: 'GET' }, STORAGE_KEYS.EXPENSES),
+  getExpenses: () => request('saidas/listar', {}, STORAGE_KEYS.EXPENSES),
   saveExpense: (e: any) => request('saidas/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.EXPENSES),
   deleteExpense: (id: string) => request(`saidas/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.EXPENSES),
   
-  getGoals: () => request('goals/listar', { method: 'GET' }, STORAGE_KEYS.GOALS),
+  getGoals: () => request('goals/listar', {}, STORAGE_KEYS.GOALS),
   saveGoal: (e: any) => request('goals/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.GOALS),
   deleteGoal: (id: string) => request(`goals/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.GOALS),
 
@@ -105,7 +103,7 @@ export const api = {
     return request('auth/login', { method: 'POST', body: JSON.stringify(credentials) });
   },
 
-  getUsers: () => request('users/listar', { method: 'GET' }, STORAGE_KEYS.USERS),
+  getUsers: () => request('users/listar', {}, STORAGE_KEYS.USERS),
   saveUser: (u: any) => request('users/salvar', { method: 'POST', body: JSON.stringify(u) }, STORAGE_KEYS.USERS),
   deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.USERS)
 };
