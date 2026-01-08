@@ -2,13 +2,83 @@
 const express = require('express');
 const cors = require('cors');
 const db = require('./db');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Aumentado para suportar backups grandes
 
 // Rota de Saúde
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// --- SISTEMA / BACKUP ---
+app.post('/api/system/backup', async (req, res) => {
+  const backupData = req.body;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupDir = path.join(__dirname, 'backups');
+
+  try {
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir);
+    }
+    
+    const fileName = `backup_${timestamp}.json`;
+    fs.writeFileSync(path.join(backupDir, fileName), JSON.stringify(backupData, null, 2));
+    
+    res.json({ success: true, message: 'Cópia de salvamento recebida com sucesso.', file: fileName });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao processar backup no servidor.' });
+  }
+});
+
+// --- AUTENTICAÇÃO ---
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+    if (rows.length > 0) {
+      const user = rows[0];
+      delete user.password;
+      res.json({ user });
+    } else {
+      res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- USUÁRIOS (EQUIPE) ---
+app.get('/api/users/listar', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT id, username, displayName, email FROM users');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/users/salvar', async (req, res) => {
+  const { id, username, password, displayName, email } = req.body;
+  try {
+    await db.query(`
+      INSERT INTO users (id, username, password, displayName, email)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        username = VALUES(username),
+        password = VALUES(password),
+        displayName = VALUES(displayName),
+        email = VALUES(email)
+    `, [id, username, password, displayName, email]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/users/excluir/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // --- FATURAMENTO ---
 app.get('/api/faturamento/listar', async (req, res) => {
