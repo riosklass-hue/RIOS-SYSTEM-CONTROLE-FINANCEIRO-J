@@ -26,7 +26,7 @@ const saveLocal = (key: string, data: any) => {
 async function request(endpoint: string, options: RequestInit = {}, storageKey?: string) {
   const url = `${BASE_URL}/${endpoint}`;
   
-  // Se for uma operação de escrita, atualiza o local imediatamente para garantir fluidez
+  // Sincronização Local Imediata (Optimistic UI)
   if (storageKey && options.method && options.method !== 'GET') {
     const localData = getLocal(storageKey);
     const bodyData = options.body ? JSON.parse(options.body as string) : {};
@@ -45,7 +45,7 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduzido para 5s para evitar travamento visual
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de espera máxima
 
     const response = await fetch(url, {
       ...options,
@@ -68,7 +68,7 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
       return data;
     }
   } catch (error) {
-    console.warn(`Servidor Hostinger Offline ou lento. Operação mantida localmente.`);
+    console.warn(`[API] Hostinger inacessível ou lenta. Usando cache local.`);
   }
 
   return storageKey ? getLocal(storageKey) : null;
@@ -82,28 +82,27 @@ export const api = {
     } catch (e) { return false; }
   },
   
-  getEntries: () => request('faturamento/listar', {}, STORAGE_KEYS.ENTRIES),
+  getEntries: () => request('faturamento/listar', { method: 'GET' }, STORAGE_KEYS.ENTRIES),
   saveEntry: (e: any) => request('faturamento/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.ENTRIES),
   deleteEntry: (id: string) => request(`faturamento/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.ENTRIES),
   
-  getExpenses: () => request('saidas/listar', {}, STORAGE_KEYS.EXPENSES),
+  getExpenses: () => request('saidas/listar', { method: 'GET' }, STORAGE_KEYS.EXPENSES),
   saveExpense: (e: any) => request('saidas/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.EXPENSES),
   deleteExpense: (id: string) => request(`saidas/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.EXPENSES),
   
-  getGoals: () => request('goals/listar', {}, STORAGE_KEYS.GOALS),
+  getGoals: () => request('goals/listar', { method: 'GET' }, STORAGE_KEYS.GOALS),
   saveGoal: (e: any) => request('goals/salvar', { method: 'POST', body: JSON.stringify(e) }, STORAGE_KEYS.GOALS),
   deleteGoal: (id: string) => request(`goals/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.GOALS),
 
   authenticate: async (credentials: any) => {
     const { username, password } = credentials;
-    // Bypass solicitado: admin/1234
     if (username.toLowerCase() === 'admin' && password === '1234') {
       return { user: { id: 'admin', username: 'admin', displayName: 'Master Administrator', email: 'admin@riossistem.com.br' } };
     }
     return request('auth/login', { method: 'POST', body: JSON.stringify(credentials) });
   },
 
-  getUsers: () => request('users/listar', {}, STORAGE_KEYS.USERS),
+  getUsers: () => request('users/listar', { method: 'GET' }, STORAGE_KEYS.USERS),
   saveUser: (u: any) => request('users/salvar', { method: 'POST', body: JSON.stringify(u) }, STORAGE_KEYS.USERS),
   deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.USERS)
 };
