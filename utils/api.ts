@@ -45,7 +45,7 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 segundos para operações maiores
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 segundos de espera máxima
 
     const response = await fetch(url, {
       ...options,
@@ -68,7 +68,7 @@ async function request(endpoint: string, options: RequestInit = {}, storageKey?:
       return data;
     }
   } catch (error) {
-    console.warn(`[API] Erro de rede. Usando cache local.`);
+    console.warn(`[API] Hostinger inacessível ou lenta. Usando cache local.`);
   }
 
   return storageKey ? getLocal(storageKey) : null;
@@ -96,7 +96,6 @@ export const api = {
 
   authenticate: async (credentials: any) => {
     const { username, password } = credentials;
-    // Fallback Admin
     if (username.toLowerCase() === 'admin' && password === '1234') {
       return { user: { id: 'admin', username: 'admin', displayName: 'Master Administrator', email: 'admin@riossistem.com.br' } };
     }
@@ -105,7 +104,5 @@ export const api = {
 
   getUsers: () => request('users/listar', { method: 'GET' }, STORAGE_KEYS.USERS),
   saveUser: (u: any) => request('users/salvar', { method: 'POST', body: JSON.stringify(u) }, STORAGE_KEYS.USERS),
-  deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.USERS),
-
-  sendBackup: (data: any) => request('system/backup', { method: 'POST', body: JSON.stringify(data) })
+  deleteUser: (id: string) => request(`users/excluir/${id}`, { method: 'DELETE' }, STORAGE_KEYS.USERS)
 };
