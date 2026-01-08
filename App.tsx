@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, AlertTriangle, WifiOff, Zap } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, AlertTriangle, WifiOff, Zap, ShieldCheck } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -9,7 +9,7 @@ import { ExpenseSection } from './components/ExpenseSection';
 import { GoalSection } from './components/GoalSection';
 import { ReportsSection } from './components/ReportsSection';
 import { UserSection } from './components/UserSection';
-import { api } from './utils/api';
+import { api, STORAGE_KEYS } from './utils/api';
 
 type Tab = 'dashboard' | 'income' | 'expenses' | 'goals' | 'reports' | 'users';
 
@@ -33,10 +33,23 @@ const App: React.FC = () => {
   const [isServerDown, setIsServerDown] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  // Inicializa estados com o que já estiver salvo no navegador (independente de login)
+  const [entries, setEntries] = useState<Entry[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ENTRIES);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.EXPENSES);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.GOALS);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.USERS);
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -56,10 +69,10 @@ const App: React.FC = () => {
         api.getUsers()
       ]);
 
-      setEntries(Array.isArray(entriesData) ? entriesData : []);
-      setExpenses(Array.isArray(expensesData) ? expensesData : []);
-      setGoals(Array.isArray(goalsData) ? goalsData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
+      setEntries(Array.isArray(entriesData) ? entriesData : entries);
+      setExpenses(Array.isArray(expensesData) ? expensesData : expenses);
+      setGoals(Array.isArray(goalsData) ? goalsData : goals);
+      setUsers(Array.isArray(usersData) ? usersData : users);
       
       const status = await api.checkStatus();
       if (!status) setIsServerDown(true);
@@ -68,7 +81,7 @@ const App: React.FC = () => {
     } finally {
       if (showLoader) setIsLoading(false);
     }
-  }, []);
+  }, [entries, expenses, goals, users]);
 
   useEffect(() => {
     if (isAuthenticated) loadAllData();
@@ -126,13 +139,16 @@ const App: React.FC = () => {
     setIsEmergencyMode(false);
     setCurrentUser(null);
     setActiveTab('dashboard');
-    localStorage.clear();
+    // IMPORTANTE: Removemos localStorage.clear() para preservar os dados de faturamento/metas/saídas
+    localStorage.removeItem('rios_auth');
+    localStorage.removeItem('rios_emergency');
+    localStorage.removeItem('rios_user');
   };
 
   const handleAction = async (type: 'entry' | 'expense' | 'goal' | 'user', action: 'save' | 'delete', data: any) => {
     setIsSyncing(true);
     
-    // Atualização Otimista da UI
+    // Atualização Otimista da UI imediata
     if (action === 'save') {
       if (type === 'entry') setEntries(prev => [...prev.filter(i => i.id !== data.id), data]);
       if (type === 'expense') setExpenses(prev => [...prev.filter(i => i.id !== data.id), data]);
@@ -189,7 +205,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Sincronizando Banco de Dados Hostinger...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Sincronizando com Hostinger...</p>
       </div>
     );
   }
@@ -241,7 +257,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#020617] text-slate-100">
       {isEmergencyMode && (
         <div className="bg-amber-600 text-white py-1.5 px-4 text-center text-[9px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3">
-          <Zap className="w-3 h-3 animate-pulse" /> Modo Offline Ativo: Dados serão sincronizados ao detectar sinal do servidor.
+          <Zap className="w-3 h-3 animate-pulse" /> Modo Offline Ativo: Dados salvos localmente e sincronizados em rede.
         </div>
       )}
 
@@ -290,13 +306,13 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4 bg-slate-900/80 px-5 py-3 rounded-2xl border border-slate-800/50">
              <div className="flex items-center gap-6">
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Database className="w-3 h-3" /> DATABASE:</span>
-                  <span className={`text-[10px] font-black uppercase tracking-tighter ${isEmergencyMode ? 'text-amber-500' : 'text-white'}`}>{isEmergencyMode ? 'OFFLINE / CACHE' : 'MySQL CLOUD'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-emerald-500" /> BANCO LOCAL:</span>
+                  <span className={`text-[10px] font-black uppercase tracking-tighter text-emerald-400`}>PROTEGIDO</span>
                 </div>
                 <div className="w-[1px] h-6 bg-slate-800"></div>
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /> STATUS:</span>
-                  <span className={`text-[10px] font-mono font-bold ${!isServerDown ? 'text-emerald-400' : 'text-rose-500'}`}>{!isServerDown ? 'SINCRONIZADO' : 'AGUARDANDO REDE'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /> NUVEM:</span>
+                  <span className={`text-[10px] font-mono font-bold ${!isServerDown ? 'text-blue-400' : 'text-amber-500'}`}>{!isServerDown ? 'CONECTADO' : 'STANDBY'}</span>
                 </div>
              </div>
              <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all`}>
