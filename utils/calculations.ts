@@ -17,51 +17,56 @@ export const formatCurrency = (value: number) => {
 };
 
 export const calculateEntries = (entries: Entry[], goals: Goal[]): CalculatedEntry[] => {
-  return entries.map(entry => {
-    const goalObj = goals.find(g => g.companyName === entry.companyName);
-    const partialTotal = entry.bloqueiraValue + entry.agentValue;
-    const totalGain = partialTotal + entry.idep40hValue + entry.idep20hValue;
-    const date = new Date(entry.date);
-    
-    // Conforme solicitado: Diferença Meta deve utilizar a Meta Mensal (Plat)
-    // A Meta Mensal é calculada como 4x a Meta Semanal cadastrada
-    const monthlyBloqMeta = goalObj ? (goalObj.bloqueiraMeta * 4) : 0;
-    const monthlyAgentMeta = goalObj ? (goalObj.agentMeta * 4) : 0;
-    
-    // Meta Weekly foca apenas na Plataforma (Bloqueira + Agente)
-    const weeklyGoal = goalObj ? (goalObj.bloqueiraMeta + goalObj.agentMeta) : 0;
-    
-    return {
-      ...entry,
-      partialTotal,
-      totalGain,
-      // Diferenças calculadas contra as metas mensais (4x)
-      diffBloqueira: entry.bloqueiraValue - monthlyBloqMeta,
-      diffAgent: entry.agentValue - monthlyAgentMeta,
-      weeklyGoal,
-      difference: totalGain - weeklyGoal,
-      weekNumber: getWeekNumber(date),
-      month: date.toLocaleString('pt-BR', { month: 'long' })
-    };
-  });
+  return entries
+    .filter(e => e.status !== 'inativo')
+    .map(entry => {
+      const date = new Date(entry.date);
+      
+      // REGRAS DE CÁLCULO SOLICITADAS:
+      // 1. Plataforma Bruta = soma de todos os valores lançados
+      const plataformaBruta = (entry.bloqueiraValue || 0) + 
+                             (entry.agentValue || 0) + 
+                             (entry.idep40hValue || 0) + 
+                             (entry.idep20hValue || 0);
+      
+      // 2. IDEP = soma IDEP 40h + IDEP 20h
+      const idepTotal = (entry.idep40hValue || 0) + (entry.idep20hValue || 0);
+      
+      // 3. Total do Lançamento = Plataforma Bruta - IDEP
+      const totalLiquido = plataformaBruta - idepTotal;
+
+      // Adicionando mapeamentos para propriedades esperadas na UI
+      const partialTotal = totalLiquido; // Bloqueira + Agente
+      const totalGain = plataformaBruta; // Bruto Total
+
+      return {
+        ...entry,
+        plataformaBruta,
+        idepTotal,
+        totalLiquido,
+        partialTotal,
+        totalGain,
+        weekNumber: getWeekNumber(date),
+        month: date.toLocaleString('pt-BR', { month: 'long' })
+      };
+    });
 };
 
 export const getCompanySummaries = (entries: Entry[], goals: Goal[]): CompanySummary[] => {
-  return goals.map(goal => {
-    const companyEntries = entries.filter(e => e.companyName === goal.companyName);
+  return goals.filter(g => g.status !== 'inativo').map(goal => {
+    const companyEntries = entries.filter(e => e.companyName === goal.companyName && e.status !== 'inativo');
     
-    const ganhoBloqueira = companyEntries.reduce((acc, curr) => acc + curr.bloqueiraValue, 0);
-    const ganhoAgente = companyEntries.reduce((acc, curr) => acc + curr.agentValue, 0);
-    const ganho40h = companyEntries.reduce((acc, curr) => acc + curr.idep40hValue, 0);
-    const ganho20h = companyEntries.reduce((acc, curr) => acc + curr.idep20hValue, 0);
+    const ganhoBloqueira = companyEntries.reduce((acc, curr) => acc + (curr.bloqueiraValue || 0), 0);
+    const ganhoAgente = companyEntries.reduce((acc, curr) => acc + (curr.agentValue || 0), 0);
+    const ganho40h = companyEntries.reduce((acc, curr) => acc + (curr.idep40hValue || 0), 0);
+    const ganho20h = companyEntries.reduce((acc, curr) => acc + (curr.idep20hValue || 0), 0);
     
-    const ganhoPlataforma = ganhoBloqueira + ganhoAgente;
-    const ganhoIdep = ganho40h + ganho20h;
-
-    const metaPlataformaTotal = goal.bloqueiraMeta + goal.agentMeta;
-    const metaIdepTotal = goal.idep40hMeta + goal.idep20hMeta;
+    // Bruto da Unidade
+    const ganhoGeral = ganhoBloqueira + ganhoAgente + ganho40h + ganho20h;
     
-    // Conforme solicitado: Meta Geral (Semanal) não contabiliza IDEP
+    const metaPlataformaTotal = (goal.bloqueiraMeta || 0) + (goal.agentMeta || 0);
+    const metaIdepTotal = (goal.idep40hMeta || 0) + (goal.idep20hMeta || 0);
+    
     const metaGeral = metaPlataformaTotal; 
     const metaGeralMensal = metaGeral * 4;
 
@@ -78,12 +83,11 @@ export const getCompanySummaries = (entries: Entry[], goals: Goal[]): CompanySum
       metaGeralMensal,
       ganhoBloqueira,
       ganhoAgente,
-      ganhoPlataforma,
+      ganhoPlataforma: ganhoBloqueira + ganhoAgente,
       ganho40h,
       ganho20h,
-      ganhoIdep,
-      // Geral Real definido como a somatória de Total IDEP (Meta) + Meta Men. (Plat)
-      ganhoGeral: metaIdepTotal + metaGeralMensal
+      ganhoIdep: ganho40h + ganho20h,
+      ganhoGeral
     };
   });
 };

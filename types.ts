@@ -13,6 +13,7 @@ export interface Goal {
   agentMeta: number;
   idep40hMeta: number;
   idep20hMeta: number;
+  status: 'ativo' | 'inativo';
 }
 
 export interface Entry {
@@ -23,14 +24,15 @@ export interface Entry {
   agentValue: number;
   idep40hValue: number;
   idep20hValue: number;
+  status: 'ativo' | 'inativo';
 }
 
 export interface Expense {
   id: string;
-  data: string; // Mapeado para 'data' no banco
-  nome: string; // Mapeado para 'nome' (antiga descrição)
-  valor: number; // Mapeado para 'valor'
-  local?: ExpenseLocal; // Opcional se não houver na tabela, mantido para lógica de interface
+  data: string;
+  nome: string;
+  valor: number;
+  local?: ExpenseLocal;
 }
 
 export interface UserProfile {
@@ -38,24 +40,23 @@ export interface UserProfile {
   username: string;
   password: string;
   displayName: string;
-  email: string; // Adicionado para recuperação de senha
+  email: string;
 }
 
 export interface CalculatedEntry extends Entry {
+  plataformaBruta: number;
+  idepTotal: number;
+  totalLiquido: number; // Plataforma Bruta - IDEP
+  month: string;
+  weekNumber: number;
+  // Propriedades adicionais para compatibilidade com UI
   partialTotal: number;
   totalGain: number;
-  diffBloqueira: number;
-  diffAgent: number;
-  weekNumber: number;
-  month: string;
-  weeklyGoal: number;
-  difference: number;
 }
 
 export interface CompanySummary {
   companyName: string;
   code: string;
-  // Metas (Previsto) - Semanal
   metaBloqueira: number;
   metaAgente: number;
   metaPlataformaTotal: number;
@@ -63,14 +64,12 @@ export interface CompanySummary {
   meta20h: number;
   metaIdepTotal: number;
   metaGeral: number;
-  // Meta Mensal (Auto-calculada: Semanal * 4)
   metaGeralMensal: number;
-  // Realizado (Ganhos)
   ganhoBloqueira: number;
   ganhoAgente: number;
   ganhoPlataforma: number;
   ganho40h: number;
   ganho20h: number;
   ganhoIdep: number;
-  ganhoGeral: number;
+  ganhoGeral: number; // Bruto Acumulado da Unidade
 }
