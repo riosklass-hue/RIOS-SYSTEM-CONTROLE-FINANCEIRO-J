@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, ShieldCheck, Download, Save } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -29,6 +29,7 @@ const App: React.FC = () => {
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBackuping, setIsBackuping] = useState(false);
   const [isServerDown, setIsServerDown] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   
@@ -91,6 +92,38 @@ const App: React.FC = () => {
     setIsSyncing(true);
     await loadAllData(false);
     setIsSyncing(false);
+  };
+
+  const handleBackup = async () => {
+    setIsBackuping(true);
+    const backupData = {
+      entries,
+      expenses,
+      goals,
+      users,
+      timestamp: new Date().toISOString(),
+      appVersion: '1.0.0-PROD'
+    };
+
+    try {
+      // 1. Download Local
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `rios_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      // 2. Enviar para fi.riossistem.com.br
+      await api.sendBackup(backupData);
+      
+      alert("Cópia de salvamento enviada com sucesso para fi.riossistem.com.br e baixada localmente.");
+    } catch (err) {
+      alert("Cópia baixada localmente. O envio para o servidor falhou.");
+    } finally {
+      setIsBackuping(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -281,9 +314,14 @@ const App: React.FC = () => {
                   <span className={`text-[10px] font-mono font-bold ${!isServerDown ? 'text-blue-400' : 'text-rose-500'}`}>{!isServerDown ? 'CONECTADO' : 'AGUARDANDO'}</span>
                 </div>
              </div>
-             <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all`}>
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-             </button>
+             <div className="flex gap-2">
+                <button title="Cópia de Salvamento Completa" onClick={handleBackup} disabled={isBackuping} className={`p-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white rounded-lg transition-all border border-emerald-500/20`}>
+                  {isBackuping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                </button>
+                <button title="Sincronizar Manual" onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all`}>
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
+             </div>
           </div>
         </div>
       </footer>
