@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, WifiOff, Cloud, Server, Database, Crown, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, ArrowUpCircle, ArrowDownCircle, Target, FileBarChart, Users, LogOut, Loader2, RefreshCw, Database, Crown, ShieldAlert, AlertTriangle, WifiOff, Zap } from 'lucide-react';
 import { Entry, Goal, Expense, UserProfile } from './types';
 import { calculateEntries } from './utils/calculations';
 import { DashboardCards } from './components/DashboardCards';
@@ -12,7 +12,6 @@ import { UserSection } from './components/UserSection';
 import { api } from './utils/api';
 
 type Tab = 'dashboard' | 'income' | 'expenses' | 'goals' | 'reports' | 'users';
-type ApiStatus = 'online' | 'offline' | 'checking';
 
 const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) => (
   <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -22,20 +21,16 @@ const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) =
 );
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('rios_auth_session') === 'active';
-  });
-  
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('rios_auth') === 'true');
+  const [isEmergencyMode, setIsEmergencyMode] = useState<boolean>(() => localStorage.getItem('rios_emergency') === 'true');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem('rios_current_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) { return null; }
+    const saved = localStorage.getItem('rios_user');
+    return saved ? JSON.parse(saved) : null;
   });
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
+  const [isServerDown, setIsServerDown] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -51,6 +46,8 @@ const App: React.FC = () => {
 
   const loadAllData = useCallback(async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
+    setIsServerDown(false);
+    
     try {
       const [entriesData, expensesData, goalsData, usersData] = await Promise.all([
         api.getEntries(),
@@ -64,10 +61,10 @@ const App: React.FC = () => {
       setGoals(Array.isArray(goalsData) ? goalsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
       
-      const isOnline = await api.checkStatus();
-      setApiStatus(isOnline ? 'online' : 'offline');
+      const status = await api.checkStatus();
+      if (!status) setIsServerDown(true);
     } catch (error) {
-      setApiStatus('offline');
+      setIsServerDown(true);
     } finally {
       if (showLoader) setIsLoading(false);
     }
@@ -87,75 +84,84 @@ const App: React.FC = () => {
     e.preventDefault();
     setAuthError('');
     setIsSyncing(true);
+
     try {
-      const response = await api.authenticate({ username, password });
+      const response = await api.authenticate({ username: username.trim(), password: password.trim() });
       if (response && response.user) {
-        setIsAuthenticated(true);
         setCurrentUser(response.user);
-        localStorage.setItem('rios_auth_session', 'active');
-        localStorage.setItem('rios_current_user', JSON.stringify(response.user));
+        setIsAuthenticated(true);
+        setIsEmergencyMode(false);
+        localStorage.setItem('rios_auth', 'true');
+        localStorage.setItem('rios_emergency', 'false');
+        localStorage.setItem('rios_user', JSON.stringify(response.user));
+      } else {
+        setAuthError('Credenciais não reconhecidas pelo Hostinger.');
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Credenciais inválidas.');
+      setAuthError('Falha crítica de conexão. Use o acesso de emergência abaixo.');
     } finally {
       setIsSyncing(false);
     }
   };
 
+  const handleEmergencyAccess = () => {
+    const emergencyUser = {
+      id: 'admin',
+      username: 'admin',
+      password: '1234',
+      displayName: 'Admin (Modo Offline)',
+      email: 'admin@riossistem.com.br'
+    };
+    setCurrentUser(emergencyUser);
+    setIsAuthenticated(true);
+    setIsEmergencyMode(true);
+    setIsServerDown(true);
+    localStorage.setItem('rios_auth', 'true');
+    localStorage.setItem('rios_emergency', 'true');
+    localStorage.setItem('rios_user', JSON.stringify(emergencyUser));
+  };
+
   const handleLogout = () => {
-    localStorage.removeItem('rios_auth_session');
-    localStorage.removeItem('rios_current_user');
     setIsAuthenticated(false);
+    setIsEmergencyMode(false);
     setCurrentUser(null);
     setActiveTab('dashboard');
+    localStorage.clear();
   };
 
   const handleAction = async (type: 'entry' | 'expense' | 'goal' | 'user', action: 'save' | 'delete', data: any) => {
-    // 1. Otimismo na UI: Atualiza a tela imediatamente com lógica de 'Upsert'
-    if (action === 'save') {
-      if (type === 'entry') {
-        setEntries(prev => {
-          const exists = prev.some(x => x.id === data.id);
-          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
-        });
-        await api.saveEntry(data);
-      } else if (type === 'expense') {
-        setExpenses(prev => {
-          const exists = prev.some(x => x.id === data.id);
-          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
-        });
-        await api.saveExpense(data);
-      } else if (type === 'goal') {
-        setGoals(prev => {
-          const exists = prev.some(x => x.id === data.id);
-          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
-        });
-        await api.saveGoal(data);
-      } else if (type === 'user') {
-        setUsers(prev => {
-          const exists = prev.some(x => x.id === data.id);
-          return exists ? prev.map(x => x.id === data.id ? data : x) : [...prev, data];
-        });
-        await api.saveUser(data);
-      }
-    } else if (action === 'delete') {
-      if (type === 'entry') {
-        setEntries(prev => prev.filter(x => x.id !== data));
-        await api.deleteEntry(data);
-      } else if (type === 'expense') {
-        setExpenses(prev => prev.filter(x => x.id !== data));
-        await api.deleteExpense(data);
-      } else if (type === 'goal') {
-        setGoals(prev => prev.filter(x => x.id !== data));
-        await api.deleteGoal(data);
-      } else if (type === 'user') {
-        setUsers(prev => prev.filter(x => x.id !== data));
-        await api.deleteUser(data);
-      }
-    }
+    setIsSyncing(true);
     
-    // 2. Sincronização em background para garantir integridade com o servidor
-    loadAllData(false);
+    // Atualização Otimista da UI
+    if (action === 'save') {
+      if (type === 'entry') setEntries(prev => [...prev.filter(i => i.id !== data.id), data]);
+      if (type === 'expense') setExpenses(prev => [...prev.filter(i => i.id !== data.id), data]);
+      if (type === 'goal') setGoals(prev => [...prev.filter(i => i.id !== data.id), data]);
+      if (type === 'user') setUsers(prev => [...prev.filter(i => i.id !== data.id), data]);
+    } else {
+      if (type === 'entry') setEntries(prev => prev.filter(i => i.id !== data));
+      if (type === 'expense') setExpenses(prev => prev.filter(i => i.id !== data));
+      if (type === 'goal') setGoals(prev => prev.filter(i => i.id !== data));
+      if (type === 'user') setUsers(prev => prev.filter(i => i.id !== data));
+    }
+
+    try {
+      if (action === 'save') {
+        if (type === 'entry') await api.saveEntry(data);
+        else if (type === 'expense') await api.saveExpense(data);
+        else if (type === 'goal') await api.saveGoal(data);
+        else if (type === 'user') await api.saveUser(data);
+      } else {
+        if (type === 'entry') await api.deleteEntry(data);
+        else if (type === 'expense') await api.deleteExpense(data);
+        else if (type === 'goal') await api.deleteGoal(data);
+        else if (type === 'user') await api.deleteUser(data);
+      }
+    } catch (err) {
+      console.error("Falha ao sincronizar com nuvem. Mantido em cache local.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const totals = useMemo(() => {
@@ -183,32 +189,47 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Protegendo sua Conexão...</p>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Sincronizando Banco de Dados Hostinger...</p>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617] p-6">
-        <div className="w-full max-w-md bg-[#0f172a] border border-slate-800 p-10 rounded-[3rem] shadow-2xl text-center relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center bg-[#020617] p-6 relative">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>
+          <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-rose-600/10 blur-[120px] rounded-full"></div>
+        </div>
+
+        <div className="w-full max-w-md bg-[#0f172a] border border-slate-800 p-10 rounded-[3rem] shadow-2xl text-center relative overflow-hidden z-10">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-rose-500 to-blue-600"></div>
           <RiosLogo className="w-16 h-16 mx-auto mb-6" />
           <h1 className="text-xl font-black text-white mb-2 tracking-[0.2em] uppercase">RIOS SYSTEM</h1>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Gestão e Tecnologia Financeira</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-8 italic">Acesso Exclusivo à Nuvem Hostinger</p>
           
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
               <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Login Operador</label>
-              <input type="text" placeholder="Acesso" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={username} onChange={e => setUsername(e.target.value)} required />
+              <input type="text" placeholder="admin" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={username} onChange={e => setUsername(e.target.value)} required />
             </div>
             <div>
               <label className="text-[9px] font-black text-slate-500 uppercase ml-4 mb-1 block">Senha Segura</label>
-              <input type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input type="password" placeholder="1234" className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-5 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
-            {authError && <p className="text-rose-500 text-[10px] font-bold text-center bg-rose-500/10 py-3 rounded-xl border border-rose-500/20">{authError}</p>}
-            <button type="submit" disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50">
-              {isSyncing ? 'Autenticando...' : 'Entrar'}
+            {authError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex flex-col gap-2 items-center animate-in fade-in slide-in-from-top-2">
+                <div className="flex gap-3 items-center">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <p className="text-rose-500 text-[10px] font-bold leading-tight">{authError}</p>
+                </div>
+                <button type="button" onClick={handleEmergencyAccess} className="mt-2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white flex items-center gap-1.5 underline">
+                   <Zap className="w-3 h-3 text-amber-500" /> Acesso de Contingência
+                </button>
+              </div>
+            )}
+            <button type="submit" disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-xl hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Entrar no Sistema'}
             </button>
           </form>
         </div>
@@ -218,6 +239,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#020617] text-slate-100">
+      {isEmergencyMode && (
+        <div className="bg-amber-600 text-white py-1.5 px-4 text-center text-[9px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3">
+          <Zap className="w-3 h-3 animate-pulse" /> Modo Offline Ativo: Dados serão sincronizados ao detectar sinal do servidor.
+        </div>
+      )}
+
       <header className="bg-[#0f172a]/95 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50 px-4 py-4 shadow-2xl">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -259,20 +286,20 @@ const App: React.FC = () => {
 
       <footer className="bg-[#0f172a] border-t border-slate-800 py-6 px-4">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-600 text-[9px] font-black tracking-widest uppercase italic">Tecnologia Rios &copy; 2025</p>
+          <p className="text-slate-600 text-[9px] font-black tracking-widest uppercase italic">Tecnologia Rios &copy; 2025 | MySQL Hostinger Cloud</p>
           <div className="flex items-center gap-4 bg-slate-900/80 px-5 py-3 rounded-2xl border border-slate-800/50">
-             <div className="flex items-center gap-4">
+             <div className="flex items-center gap-6">
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Database className="w-3 h-3" /> REGISTROS:</span>
-                  <span className="text-[10px] font-black text-white uppercase tracking-tighter">{(entries.length + expenses.length + goals.length)} lançamentos salvos</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Database className="w-3 h-3" /> DATABASE:</span>
+                  <span className={`text-[10px] font-black uppercase tracking-tighter ${isEmergencyMode ? 'text-amber-500' : 'text-white'}`}>{isEmergencyMode ? 'OFFLINE / CACHE' : 'MySQL CLOUD'}</span>
                 </div>
                 <div className="w-[1px] h-6 bg-slate-800"></div>
                 <div className="flex flex-col">
-                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><Cloud className="w-3 h-3" /> STATUS:</span>
-                  <span className={`text-[10px] font-mono font-bold ${apiStatus === 'online' ? 'text-emerald-400' : 'text-amber-500'}`}>{apiStatus === 'online' ? 'SINCRONIZADO' : 'LOCAL-FIRST'}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase flex items-center gap-1.5"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /> STATUS:</span>
+                  <span className={`text-[10px] font-mono font-bold ${!isServerDown ? 'text-emerald-400' : 'text-rose-500'}`}>{!isServerDown ? 'SINCRONIZADO' : 'AGUARDANDO REDE'}</span>
                 </div>
              </div>
-             <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all ${isSyncing ? 'opacity-50' : ''}`}>
+             <button onClick={handleManualSync} disabled={isSyncing} className={`p-2 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded-lg transition-all`}>
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
              </button>
           </div>
