@@ -1,13 +1,20 @@
 
-const express = require('express');
-const cors = require('cors');
-const db = require('./db');
-const fs = require('fs');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
+import db from './db.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Aumentado para suportar backups grandes
+app.use(express.json({ limit: '50mb' }));
+
+// Servir arquivos estáticos do Vite (pasta dist)
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Rota de Saúde
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
@@ -168,6 +175,11 @@ app.post('/api/goals/salvar', async (req, res) => {
     `, [id, code, companyName, bloqueiraMeta, agentMeta, idep40hMeta, idep20hMeta]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Rota coringa para o React (SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;

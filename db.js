@@ -1,14 +1,14 @@
 
-const mysql = require('mysql2');
+import mysql from 'mysql2';
 
 const pool = mysql.createPool({
-  host: 'localhost', // Geralmente localhost na Hostinger
-  user: 'u123456789_rios', // Substitua pelo seu usuário MySQL
-  password: 'sua_senha_secreta', // Substitua pela sua senha
-  database: 'u123456789_rios_db', // Substitua pelo nome do seu banco
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'u123456789_rios', // <--- Verifique se é o mesmo da Hostinger
+  password: process.env.DB_PASSWORD || 'sua_senha', 
+  database: process.env.DB_NAME || 'u123456789_rios_db',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
 });
 
-module.exports = pool.promise();
+export default pool.promise();
