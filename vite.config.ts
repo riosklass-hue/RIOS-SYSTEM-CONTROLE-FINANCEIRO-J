@@ -6,6 +6,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: false,
     rollupOptions: {
       external: [
         'express',
@@ -14,11 +15,16 @@ export default defineConfig({
         'path',
         'url',
         'fs'
-      ]
-    }
+      ],
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'recharts', 'lucide-react'],
+        },
+      },
+    },
   },
   server: {
     port: 5173,
     strictPort: true,
-  }
+  },
 });

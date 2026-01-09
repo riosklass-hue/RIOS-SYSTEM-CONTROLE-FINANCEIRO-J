@@ -13,11 +13,45 @@ import { api, STORAGE_KEYS } from './utils/api';
 
 type Tab = 'dashboard' | 'income' | 'expenses' | 'goals' | 'reports' | 'users';
 
-const RiosLogo: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) => (
-  <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
+const RiosLogo: React.FC<{ className?: string; animate?: boolean }> = ({ className = "w-8 h-8", animate = false }) => (
+  <svg viewBox="0 0 100 100" className={`${className} ${animate ? 'animate-pulse' : ''}`} xmlns="http://www.w3.org/2000/svg">
     <text x="35" y="75" fontFamily="serif" fontSize="70" fontWeight="bold" fill="#2563eb" style={{ fontStyle: 'italic' }}>R</text>
     <text x="15" y="70" fontFamily="serif" fontSize="75" fontWeight="bold" fill="#ef4444" style={{ fontStyle: 'italic' }}>S</text>
   </svg>
+);
+
+const LoadingScreen: React.FC<{ message?: string }> = ({ message = "Iniciando Sistemas..." }) => (
+  <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center relative overflow-hidden">
+    {/* Background Glows */}
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-600/10 blur-[100px] rounded-full"></div>
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] bg-rose-600/5 blur-[80px] rounded-full"></div>
+    
+    <div className="relative z-10 flex flex-col items-center gap-8 animate-in fade-in zoom-in duration-500">
+      <div className="relative">
+        <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full scale-150 animate-pulse"></div>
+        <RiosLogo className="w-32 h-32 relative" animate />
+      </div>
+      
+      <div className="flex flex-col items-center gap-3 text-center">
+        <h2 className="text-xl font-black text-white tracking-[0.3em] uppercase italic">RIOS SYSTEM</h2>
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+          <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">{message}</p>
+        </div>
+      </div>
+
+      <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+        <div className="h-full bg-gradient-to-r from-blue-600 to-rose-500 w-1/3 animate-[loading_2s_infinite_ease-in-out]"></div>
+      </div>
+    </div>
+
+    <style>{`
+      @keyframes loading {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(200%); }
+      }
+    `}</style>
+  </div>
 );
 
 const App: React.FC = () => {
@@ -28,6 +62,7 @@ const App: React.FC = () => {
   });
   
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Sincronizando Banco de Dados...");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackuping, setIsBackuping] = useState(false);
   const [isServerDown, setIsServerDown] = useState(false);
@@ -58,11 +93,16 @@ const App: React.FC = () => {
 
   const loadAllData = useCallback(async (showLoader = true) => {
     const hasData = entries.length > 0 || expenses.length > 0;
-    if (showLoader && !hasData) setIsLoading(true);
+    if (showLoader && !hasData) {
+      setIsLoading(true);
+      setLoadingMessage("Conectando ao MySQL Hostinger...");
+    }
     
     setIsServerDown(false);
     
     try {
+      if (showLoader && !hasData) setLoadingMessage("Recuperando faturamento e metas...");
+      
       const [entriesData, expensesData, goalsData, usersData] = await Promise.all([
         api.getEntries(),
         api.getExpenses(),
@@ -106,7 +146,6 @@ const App: React.FC = () => {
     };
 
     try {
-      // 1. Download Local
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -115,9 +154,7 @@ const App: React.FC = () => {
       link.click();
       URL.revokeObjectURL(url);
 
-      // 2. Enviar para fi.riossistem.com.br
       await api.sendBackup(backupData);
-      
       alert("Cópia de salvamento enviada com sucesso para fi.riossistem.com.br e baixada localmente.");
     } catch (err) {
       alert("Cópia baixada localmente. O envio para o servidor falhou.");
@@ -129,7 +166,8 @@ const App: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    setIsSyncing(true);
+    setIsLoading(true);
+    setLoadingMessage("Validando credenciais...");
 
     try {
       const response = await api.authenticate({ username: username.trim(), password: password.trim() });
@@ -140,11 +178,11 @@ const App: React.FC = () => {
         localStorage.setItem('rios_user', JSON.stringify(response.user));
       } else {
         setAuthError('Credenciais não reconhecidas no banco.');
+        setIsLoading(false);
       }
     } catch (err: any) {
       setAuthError('Falha de conexão com o servidor Hostinger.');
-    } finally {
-      setIsSyncing(false);
+      setIsLoading(false);
     }
   };
 
@@ -211,13 +249,8 @@ const App: React.FC = () => {
     return base;
   }, [isMaster]);
 
-  if (isLoading && isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Carregando Rios System...</p>
-      </div>
-    );
+  if (isLoading) {
+    return <LoadingScreen message={loadingMessage} />;
   }
 
   if (!isAuthenticated) {
