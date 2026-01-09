@@ -15,6 +15,7 @@ interface Props {
 const EXPENSE_COLORS = {
   [ExpenseLocal.PIX]: '#6366f1',
   [ExpenseLocal.COFRE]: '#f59e0b',
+  [ExpenseLocal.REEMBOLSO]: '#10b981',
   [ExpenseLocal.OUTROS]: '#64748b'
 };
 
@@ -59,6 +60,7 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
     const groups: Record<string, { count: number; total: number }> = {
       [ExpenseLocal.PIX]: { count: 0, total: 0 },
       [ExpenseLocal.COFRE]: { count: 0, total: 0 },
+      [ExpenseLocal.REEMBOLSO]: { count: 0, total: 0 },
       [ExpenseLocal.OUTROS]: { count: 0, total: 0 }
     };
 
@@ -87,6 +89,7 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
     const data = [
       { name: 'PIX', value: filteredExpenses.filter(e => e.local === ExpenseLocal.PIX).reduce((a, c) => a + (c.valor || 0), 0) },
       { name: 'COFRE', value: filteredExpenses.filter(e => e.local === ExpenseLocal.COFRE).reduce((a, c) => a + (c.valor || 0), 0) },
+      { name: 'REEMBOLSO', value: filteredExpenses.filter(e => e.local === ExpenseLocal.REEMBOLSO).reduce((a, c) => a + (c.valor || 0), 0) },
       { name: 'OUTROS', value: filteredExpenses.filter(e => e.local === ExpenseLocal.OUTROS || !e.local).reduce((a, c) => a + (c.valor || 0), 0) }
     ];
     return data.filter(d => d.value > 0);

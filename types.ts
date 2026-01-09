@@ -2,6 +2,7 @@
 export enum ExpenseLocal {
   PIX = 'PIX',
   COFRE = 'COFRE',
+  REEMBOLSO = 'REEMBOLSO',
   OUTROS = 'OUTROS'
 }
 

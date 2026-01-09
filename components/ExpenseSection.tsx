@@ -80,6 +80,7 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
     }, {
       [ExpenseLocal.PIX]: 0,
       [ExpenseLocal.COFRE]: 0,
+      [ExpenseLocal.REEMBOLSO]: 0,
       [ExpenseLocal.OUTROS]: 0
     } as Record<ExpenseLocal, number>);
   }, [expenses]);
@@ -123,6 +124,7 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
               <select disabled={isSubmitting} className={inputClasses} value={formData.local} onChange={e => setFormData({ ...formData, local: e.target.value as ExpenseLocal })}>
                 <option value={ExpenseLocal.PIX}>PIX</option>
                 <option value={ExpenseLocal.COFRE}>COFRE</option>
+                <option value={ExpenseLocal.REEMBOLSO}>REEMBOLSO</option>
                 <option value={ExpenseLocal.OUTROS}>OUTROS</option>
               </select>
             </div>
@@ -200,6 +202,7 @@ export const ExpenseSection: React.FC<Props> = ({ expenses, onAdd, onUpdate, onD
                       <span className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border ${
                         row.local === ExpenseLocal.PIX ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 
                         row.local === ExpenseLocal.COFRE ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                        row.local === ExpenseLocal.REEMBOLSO ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         'bg-slate-500/10 text-slate-400 border-slate-500/20'
                       }`}>
                         {row.local || 'OUTROS'}

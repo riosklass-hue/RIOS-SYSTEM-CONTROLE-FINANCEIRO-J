@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Wallet, Target, Building2, CreditCard, ChevronRight, ArrowUpRight, ArrowDownRight, Clock, MoreVertical, Shield, UserCheck, PieChart } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Target, Building2, CreditCard, ChevronRight, ArrowUpRight, ArrowDownRight, Clock, MoreVertical, Shield, UserCheck, PieChart, RefreshCcw } from 'lucide-react';
 import { formatCurrency } from '../utils/calculations';
 import { Entry, Goal, Expense, ExpenseLocal } from '../types';
 
@@ -260,9 +260,10 @@ export const DashboardCards: React.FC<Props> = ({
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shadow-md ${
                     exp.local === ExpenseLocal.PIX ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' :
                     exp.local === ExpenseLocal.COFRE ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                    exp.local === ExpenseLocal.REEMBOLSO ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
                     'bg-slate-500/10 border-slate-500/20 text-slate-400'
                   }`}>
-                    <CreditCard className="w-4 h-4" />
+                    {exp.local === ExpenseLocal.REEMBOLSO ? <RefreshCcw className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0">
                     <h5 className="text-[10px] font-black text-slate-200 uppercase truncate max-w-[100px] leading-tight">{exp.nome}</h5>
