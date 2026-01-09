@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Entry, Goal, Expense, ExpenseLocal } from '../types';
 import { calculateEntries, formatCurrency } from '../utils/calculations';
-import { TrendingDown, TrendingUp, CreditCard, Landmark, Building2, Shield, UserCheck } from 'lucide-react';
+import { TrendingDown, TrendingUp, CreditCard, Landmark, Building2, Shield, UserCheck, Receipt, ListFilter, ArrowRight } from 'lucide-react';
 
 interface Props {
   entries: Entry[];
@@ -53,6 +53,35 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
 
   const totalFilteredIncome = filteredEntries.reduce((acc, curr) => acc + curr.totalGain, 0);
   const totalFilteredExpenses = filteredExpenses.reduce((acc, curr) => acc + (curr.valor || 0), 0);
+
+  // Novos dados para análise agrupada por canal
+  const expenseGroupedData = useMemo(() => {
+    const groups: Record<string, { count: number; total: number }> = {
+      [ExpenseLocal.PIX]: { count: 0, total: 0 },
+      [ExpenseLocal.COFRE]: { count: 0, total: 0 },
+      [ExpenseLocal.OUTROS]: { count: 0, total: 0 }
+    };
+
+    filteredExpenses.forEach(exp => {
+      const loc = exp.local || ExpenseLocal.OUTROS;
+      if (groups[loc]) {
+        groups[loc].count++;
+        groups[loc].total += (exp.valor || 0);
+      }
+    });
+
+    return Object.entries(groups).map(([channel, data]) => ({
+      channel,
+      ...data,
+      avg: data.count > 0 ? data.total / data.count : 0
+    })).filter(g => g.count > 0 || g.total > 0);
+  }, [filteredExpenses]);
+
+  const topExpenses = useMemo(() => {
+    return [...filteredExpenses]
+      .sort((a, b) => (b.valor || 0) - (a.valor || 0))
+      .slice(0, 5);
+  }, [filteredExpenses]);
 
   const expenseDistribution = useMemo(() => {
     const data = [
@@ -205,12 +234,91 @@ export const ReportsSection: React.FC<Props> = ({ entries, goals, expenses, comp
               </div>
             </div>
           ))}
-          {companyPerformance.length === 0 && (
-            <div className="col-span-full py-12 flex flex-col items-center gap-4 opacity-20">
-               <Building2 className="w-12 h-12" />
-               <p className="text-[10px] font-black uppercase tracking-[0.4em]">Nenhum dado encontrado para o período</p>
+        </div>
+      </div>
+
+      {/* NOVO RELATÓRIO: Detalhamento de Saídas por Canal */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="bg-[#0f172a] p-8 rounded-[3rem] border border-slate-800 shadow-2xl">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="p-3 bg-amber-600/10 rounded-2xl">
+              <ListFilter className="w-6 h-6 text-amber-500" />
             </div>
-          )}
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Análise Agrupada de Saídas</h3>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Volume e Médias por Canal</p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/20">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-900/50 text-slate-500 text-[8px] font-black uppercase tracking-widest border-b border-slate-800">
+                  <th className="px-6 py-4">Canal</th>
+                  <th className="px-6 py-4 text-center">Transações</th>
+                  <th className="px-6 py-4 text-center">Média / Lançamento</th>
+                  <th className="px-6 py-4 text-right">Total Canal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {expenseGroupedData.map((item) => (
+                  <tr key={item.channel} className="hover:bg-slate-800/20 transition-all text-[10px]">
+                    <td className="px-6 py-4 flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: EXPENSE_COLORS[item.channel as ExpenseLocal] }}></div>
+                      <span className="font-black text-white uppercase">{item.channel}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center text-slate-400 font-bold">{item.count}</td>
+                    <td className="px-6 py-4 text-center text-slate-400 font-bold">{formatCurrency(item.avg)}</td>
+                    <td className="px-6 py-4 text-right font-black text-white">{formatCurrency(item.total)}</td>
+                  </tr>
+                ))}
+                {expenseGroupedData.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-600 font-bold uppercase tracking-widest text-[9px] opacity-30 italic">
+                      Nenhuma saída registrada para o período.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-[#0f172a] p-8 rounded-[3rem] border border-slate-800 shadow-2xl">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="p-3 bg-rose-600/10 rounded-2xl">
+              <Receipt className="w-6 h-6 text-rose-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Maiores Saídas</h3>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Top 5 Lançamentos de Alto Valor</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {topExpenses.map((exp) => (
+              <div key={exp.id} className="p-4 bg-slate-900/40 rounded-2xl border border-slate-800/50 flex items-center justify-between hover:bg-slate-800 transition-all group">
+                <div className="flex items-center gap-4">
+                  <div className="w-1.5 h-8 bg-rose-600/50 rounded-full group-hover:bg-rose-500 transition-all"></div>
+                  <div>
+                    <h5 className="text-[11px] font-black text-slate-200 uppercase truncate max-w-[200px]">{exp.nome}</h5>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">
+                      {new Date(exp.data).toLocaleDateString('pt-BR')} • {exp.local}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-black text-rose-500">{formatCurrency(exp.valor)}</span>
+                </div>
+              </div>
+            ))}
+            {topExpenses.length === 0 && (
+              <div className="py-12 flex flex-col items-center justify-center opacity-20 grayscale gap-3">
+                <Receipt className="w-10 h-10" />
+                <p className="text-[9px] font-black uppercase tracking-widest">Aguardando dados...</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
